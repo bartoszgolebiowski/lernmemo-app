@@ -7,6 +7,8 @@ import { zfd } from 'zod-form-data';
 import { z } from 'zod';
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { createGameService } from "~/lib/services/gameService";
+import { createCsvImportService } from "~/lib/services/csvImportService";
+import React, { useState } from 'react';
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,10 +26,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const userId = session.user.id;
   const attachmentSservice = createAttachmentService(db);
+  const importService = createCsvImportService(db);
   const attachments = await attachmentSservice.getUserAttachments(userId);
+  const translationsForAttachments = attachments.map(async (attachment) =>
+    importService.getTranslationsFromAttachment(attachment.attachmentId)
+  );
+  const translations = await Promise.all(translationsForAttachments);
+
+  const attachmentsWithTranslations = attachments.map((attachment, index) => ({
+    ...attachment,
+    importedAt: new Date(attachment.importedAt!).toLocaleString(),
+    translations: translations[index],
+    translationCardCount: translations[index].length,
+    targetLanguage: translations[index][0].flashcard_translation?.targetLanguage ?? 'Unknown',
+  }));
 
   return json({
-    attachments,
+    attachmentsWithTranslations,
   })
 };
 
@@ -61,15 +76,33 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const gameService = createGameService(db);
   try {
     const result = await gameService.createGame(attachmentId, userId, cards, questions);
-    return redirect(`/dashboard/games/${result.gameId}`);
+    return redirect(`/dashboard/game/${result.gameId}`);
   } catch (error) {
     return json({ errors: 'Failed to create game' }, { status: 500 });
   }
 };
 
+const DEFAULT_VALUES = {
+  cards: 10,
+  questions: 20,
+} as const;
+
 export default function ReviewPage() {
-  const { attachments } = useLoaderData<typeof loader>();
+  const { attachmentsWithTranslations } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
+
+  const toggleExpand = (attachmentId: string) => {
+    setExpandedAttachments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(attachmentId)) {
+        newSet.delete(attachmentId);
+      } else {
+        newSet.add(attachmentId);
+      }
+      return newSet;
+    });
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 py-6">
@@ -91,48 +124,116 @@ export default function ReviewPage() {
 
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <Form method="post" encType="multipart/form-data">
+              <input type="hidden" id="cards" name="cards" value={DEFAULT_VALUES.cards} />
+              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} />
               <div className="mb-6">
                 <span className="block text-sm font-medium text-gray-700 mb-2">
                   Select Attachment
                 </span>
-                {attachments.length > 0 ? (
+                {attachmentsWithTranslations.length > 0 ? (
                   <div className="border rounded-md overflow-hidden">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
                         <tr>
                           <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Select
+
                           </th>
                           <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            File Name
+                            Flashcards Count
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Language
                           </th>
                           <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Uploaded At
                           </th>
+                          <th align="right" scope="col" className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Show Flashcards
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {attachments.map((attachment) => (
-                          <tr key={attachment.attachmentId} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <input 
-                                type="radio" 
-                                id={attachment.attachmentId} 
-                                name="attachmentId" 
-                                value={attachment.attachmentId}
-                                className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300"
-                                required
-                              />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <label htmlFor={attachment.attachmentId} className="block text-sm font-medium text-gray-700 cursor-pointer">
-                                {attachment.fileLocation.split('/').pop()}
-                              </label>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {new Date(attachment.importedAt!).toLocaleString()}
-                            </td>
-                          </tr>
+                        {attachmentsWithTranslations.map((attachment) => (
+                          <React.Fragment key={attachment.attachmentId}>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                  type="submit"
+                                  name="attachmentId"
+                                  value={attachment.attachmentId}
+                                  disabled={attachmentsWithTranslations.length === 0}
+                                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                >
+                                  Start Review
+                                </button>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {attachment.translationCardCount}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {attachment.targetLanguage}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {attachment.importedAt}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpand(attachment.attachmentId)}
+                                  className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                                  aria-label={expandedAttachments.has(attachment.attachmentId) ? 'Hide Flashcards' : 'Show Flashcards'}
+                                >
+                                  {expandedAttachments.has(attachment.attachmentId) ? 'Hide 🔼' : 'Expand 🔽'}
+                                </button>
+                              </td>
+                            </tr>
+                            {expandedAttachments.has(attachment.attachmentId) && (
+                              <>
+                                <tr>
+                                  <td colSpan={4} className="px-6 py-4">
+                                    <div className="border rounded-md overflow-x-auto">
+                                      <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                          <tr>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                              Word
+                                            </th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                              Translation
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                          {attachment.translations.map((translation, idx) => (
+                                            <tr key={idx} className="hover:bg-gray-50">
+                                              <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
+                                                {translation.flashcard_translation?.word}
+                                              </td>
+                                              <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
+                                                {translation.flashcard_translation?.translation}
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td colSpan={4} className="px-6 py-4 text-center bg-gray-50">
+                                    <button
+                                      type="submit"
+                                      name="attachmentId"
+                                      value={attachment.attachmentId}
+                                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                    >
+                                      Start Review with this Set
+                                    </button>
+                                  </td>
+                                </tr>
+                              </>
+                            )}
+                          </React.Fragment>
                         ))}
                       </tbody>
                     </table>
@@ -143,44 +244,6 @@ export default function ReviewPage() {
                   </div>
                 )}
               </div>
-
-              <div className="mb-4">
-                <label htmlFor="cards" className="block text-sm font-medium text-gray-700">
-                  Number of Cards
-                </label>
-                <input
-                  type="number"
-                  id="cards"
-                  name="cards"
-                  defaultValue={20}
-                  min="1"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <div className="mb-6">
-                <label htmlFor="questions" className="block text-sm font-medium text-gray-700">
-                  Number of Questions
-                </label>
-                <input
-                  type="number"
-                  id="questions"
-                  name="questions"
-                  defaultValue={50}
-                  min="1"
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={attachments.length === 0}
-                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                Start Review
-              </button>
             </Form>
           </div>
         </div>

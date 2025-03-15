@@ -34,6 +34,35 @@ export class GameService {
     }
   }
 
+  async getTranslationsByGameId(gameId: string) {
+    return this.db
+      .select({
+        translationId: flashcardGameTranslation.translationId,
+        word: flashcardTranslation.word,
+        translation: flashcardTranslation.translation,
+        targetLanguage: flashcardTranslation.targetLanguage,
+      })
+      .from(flashcardGameTranslation)
+      .where(eq(flashcardGameTranslation.gameId, gameId))
+      .leftJoin(
+        flashcardTranslation,
+        eq(
+          flashcardGameTranslation.translationId,
+          flashcardTranslation.translationId
+        )
+      );
+  }
+
+  async getAnswersByGameId(gameId: string) {
+    return this.db
+      .select({
+        translationId: flashcardGameAnswer.translationId,
+        selectedTranslationId: flashcardGameAnswer.selectedTranslationId,
+      })
+      .from(flashcardGameAnswer)
+      .where(eq(flashcardGameAnswer.gameId, gameId));
+  }
+
   async createGame(
     attachmentId: string,
     userId: string,
@@ -96,44 +125,36 @@ export class GameService {
     }
   }
 
-  async submitAnswer(
+  /**
+   * Submit multiple answers and complete the game in a single transaction
+   */
+  async submitAnswers(
     gameId: string,
-    translationId: string,
-    selectedTranslationId: string
+    answers: Array<{
+      translationId: string;
+      selectedTranslationId: string;
+    }>
   ) {
-    const answers = await this.db
-      .insert(flashcardGameAnswer)
-      .values({
-        gameId,
-        translationId,
-        selectedTranslationId,
-      })
-      .returning();
+    try {
+      return await this.db.transaction(async (tx) => {
+        // Insert all answers
+        const answerInserts = answers.map((answer) =>
+          tx
+            .insert(flashcardGameAnswer)
+            .values({
+              gameId,
+              translationId: answer.translationId,
+              selectedTranslationId: answer.selectedTranslationId,
+            })
+            .returning()
+        );
 
-    if (!answers.length) {
-      throw new Error("Failed to submit answer");
+        await Promise.all(answerInserts);
+      });
+    } catch (e) {
+      console.error("Error submitting answers:", e);
+      throw new Error("Failed to submit answers");
     }
-
-    return { answerId: answers[0].answerId };
-  }
-
-  async getTranslationsByGameId(gameId: string) {
-    return this.db
-      .select({
-        translationId: flashcardGameTranslation.translationId,
-        word: flashcardTranslation.word,
-        translation: flashcardTranslation.translation,
-        targetLanguage: flashcardTranslation.targetLanguage,
-      })
-      .from(flashcardGameTranslation)
-      .where(eq(flashcardGameTranslation.gameId, gameId))
-      .leftJoin(
-        flashcardTranslation,
-        eq(
-          flashcardGameTranslation.translationId,
-          flashcardTranslation.translationId
-        )
-      );
   }
 
   /**
