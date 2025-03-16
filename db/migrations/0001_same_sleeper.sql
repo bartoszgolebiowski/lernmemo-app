@@ -1,0 +1,1 @@
+ALTER TABLE `flashcard_attachment` ADD `deactivated_at` text;

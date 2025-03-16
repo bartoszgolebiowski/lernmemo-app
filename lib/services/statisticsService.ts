@@ -1,5 +1,5 @@
 import { DrizzleDatabase } from "~/db/index";
-import { eq, and, count, sql, gt } from "drizzle-orm";
+import { eq, and, count, sql, gt, isNull } from "drizzle-orm";
 import {
   flashcardGameAnswer,
   flashcardAttachment,
@@ -49,6 +49,7 @@ export class StatisticsService {
       .where(
         and(
           eq(flashcardAttachment.userId, userId),
+          isNull(flashcardAttachment.deactivatedAt)
         )
       );
 

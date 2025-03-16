@@ -52,11 +52,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const validation = actionSchema.safeParse(await request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
 
-  const { language, file } = validation.data;
+  const { language, file, quickGame } = validation.data;
   const csvFile = await fileService.toString(file);
   const resultImprot = await csvService.importTranslationsFromCsv(csvFile, file.name, userId, language);
 
-  if (validation.data.quickGame === "true") {
+  if (quickGame === "true") {
     // Use GameService to create a new game
     const gameService = createGameService(db);
     try {
@@ -66,12 +66,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ errors: 'Failed to create game' }, { status: 500 });
     }
   }
-  return redirect("/dashboard");
+  
+  return redirect("/dashboard/cards");
 };
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ gameId: string }>();
   const isSubmitting = fetcher.state !== 'idle';
 
   // Add useEffect for navigation after form submission completes

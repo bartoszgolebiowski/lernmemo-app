@@ -30,7 +30,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const gameService = createGameService(db);
   const attachmentSservice = createAttachmentService(db);
   const importService = createCsvImportService(db);
-  const attachments = await attachmentSservice.getUserAttachments(userId);
+  const attachments = await attachmentSservice.getActiveUserAttachments(userId);
   const uncompletedGames = await gameService.getUncompletedGames(userId);
   const translationsForAttachments = attachments.map((attachment) =>
     importService.getTranslationsFromAttachment(attachment.attachmentId)
@@ -223,11 +223,66 @@ export default function ReviewPage() {
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <Form method="post" encType="multipart/form-data">
               <input type="hidden" id="type" name="type" value="start" />
-              <input type="hidden" id="cards" name="cards" value={DEFAULT_VALUES.cards} />
-              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                {/* Cards Selection */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">Cards Per Review</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select how many flashcards will be included in your review session.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {[10, 20, 30].map((value) => (
+                      <label key={`cards-${value}`} className="relative cursor-pointer" aria-label={`Select ${value} cards`}>
+                        <input
+                          type="radio"
+                          className="sr-only peer"
+                          name="cards"
+                          value={value}
+                          defaultChecked={value === 10}
+                        />
+                        <div className="w-16 h-16 flex items-center justify-center rounded-lg 
+                                      bg-white border-2 border-gray-200 text-gray-500
+                                      peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700
+                                      hover:bg-gray-50 transition-all duration-200">
+                          <span className="text-lg font-medium">{value}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Questions Selection */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">Questions to Complete</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Select how many questions you need to answer to complete the review.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    {[10, 20, 30, 50].map((value) => (
+                      <label key={`questions-${value}`} className="relative cursor-pointer" aria-label={`Select ${value} questions`}>
+                        <input
+                          type="radio"
+                          className="sr-only peer"
+                          name="questions"
+                          value={value}
+                          defaultChecked={value === 20}
+                        />
+                        <div className="w-16 h-16 flex items-center justify-center rounded-lg 
+                                      bg-white border-2 border-gray-200 text-gray-500
+                                      peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700
+                                      hover:bg-gray-50 transition-all duration-200">
+                          <span className="text-lg font-medium">{value}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="mb-6">
-                <span className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Attachment
+                <span className="block text-lg font-medium text-gray-900 mb-4">
+                  Select Flashcard Set
                 </span>
                 {attachmentsWithTranslations.length > 0 ? (
                   <div className="border rounded-md overflow-hidden">
@@ -278,28 +333,15 @@ export default function ReviewPage() {
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                 {attachment.importedAt}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button
-                                  type="button"
                                   onClick={() => toggleExpand(attachment.attachmentId)}
-                                  className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                                  aria-label={expandedAttachments.has(attachment.attachmentId) ? 'Hide Flashcards' : 'Show Flashcards'}
+                                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
                                 >
-                                  {expandedAttachments.has(attachment.attachmentId) ? (
-                                    <>
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                                      </svg>
-                                      Hide
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                      </svg>
-                                      Expand
-                                    </>
-                                  )}
+                                  <span className="mr-1">
+                                    {expandedAttachments.has(attachment.attachmentId) ? "▼" : "▶"}
+                                  </span>
+                                  {expandedAttachments.has(attachment.attachmentId) ? "Hide" : "View"}
                                 </button>
                               </td>
                             </tr>

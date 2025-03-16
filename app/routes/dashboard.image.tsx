@@ -59,25 +59,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const text = await aiService.imageToText(tmpFilePath, language)
   const csvText = await aiService.textToCsvFormat(text)
   const resultImprot = await csvService.importTranslationsFromCsv(csvText, file.name, userId, language);
+  
   if (quickGame === "true") {
     // Use GameService to create a new game
     const gameService = createGameService(db);
     try {
       const result = await gameService.createGame(resultImprot.attachment.attachmentId, userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
-      return new Response(JSON.stringify({ gameId: result.gameId }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      return json({ gameId: result.gameId });
     } catch (error) {
-      return new Response(JSON.stringify({
-        error: 'Failed to create game',
-      }), { status: 500 });
+      return json({ errors: 'Failed to create game' }, { status: 500 });
     }
-  } else {
-    return new Response(null, { status: 204 });
   }
+
+  return redirect("/dashboard/cards");
 };
 
 export default function ImportImagePage() {

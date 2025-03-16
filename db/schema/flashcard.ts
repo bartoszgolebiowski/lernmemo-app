@@ -16,6 +16,7 @@ export const flashcardAttachment = sqliteTable("flashcard_attachment", {
     .references(() => user.id),
   fileLocation: text("file_location").notNull(),
   importedAt: text("imported_at").$default(() => new Date().toISOString()),
+  deactivatedAt: text("deactivated_at"),
 });
 
 export const flashcardTranslation = sqliteTable("flashcard_translation", {

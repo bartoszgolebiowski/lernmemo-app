@@ -19,9 +19,6 @@ export function Header() {
               <Link to="/dashboard/cards" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                 My Flashcards
               </Link>
-              <Link to="/dashboard/settings" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
-                Settings
-              </Link>
             </nav>
             <div className="ml-4">
               <SignOutButton className="text-sm" />
