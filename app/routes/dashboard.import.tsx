@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
 import { json, redirect } from "@remix-run/node";
 import { useNavigate, useFetcher } from "@remix-run/react";
-import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
+import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import ImportCSV from "~/components/ImportCSV";
 import ExampleCSVDownload from "~/components/ExampleCSVDownload";
 import { db } from '~/db/index';
-import { auth } from '~/lib/auth.server';
 import { createCsvImportService } from '~/lib/services/csvImportService';
 import { createFileStorageService } from '~/lib/services/fileStorageService';
 import { zfd } from 'zod-form-data';
 import { createGameService } from '~/lib/services/gameService';
+import { getAuth } from '@clerk/remix/ssr.server';
 
 export const meta: MetaFunction = () => {
   return [
@@ -18,11 +18,11 @@ export const meta: MetaFunction = () => {
 };
 
 // Check for authentication same as in dashboard
-export const loader = async () => {
-  const isAuthenticated = true; // Replace with actual auth check
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!isAuthenticated) {
-    return redirect("/login");
+  if (!userId) {
+    return redirect("/sign-in");
   }
 
   return json({});
@@ -39,17 +39,17 @@ const DEFAULT_VALUES = {
   questions: 20,
 } as const;
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  })
-  if (!session) return redirect("/login");
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
+
   const csvService = createCsvImportService(db)
   const fileService = createFileStorageService();
 
-  const validation = actionSchema.safeParse(await request.formData());
+  const validation = actionSchema.safeParse(await args.request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
 
   const { language, file, quickGame } = validation.data;
@@ -66,8 +66,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ errors: 'Failed to create game' }, { status: 500 });
     }
   }
-  
-  return redirect("/dashboard/cards");
+
+  return redirect("/dashboard/review");
 };
 
 export default function ImportPage() {

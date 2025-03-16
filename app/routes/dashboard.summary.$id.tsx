@@ -1,9 +1,9 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
-import { auth } from '~/lib/auth.server';
 import { db } from '~/db/index';
 import { createGameService } from "~/lib/services/gameService";
+import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [
@@ -11,16 +11,14 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  // Authentication check
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
-  const userId = session.user.id;
-  const gameId = params.id;
+  const gameId = args.params.id;
 
   if (!gameId) {
     return redirect("/dashboard/review");
@@ -102,7 +100,7 @@ export default function Summary() {
               <h2 className="text-xl font-semibold mb-4">Your Results</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-gray-50 p-4 rounded-md text-center">
+                <div className="bg-gray-50 p-4 rounded-md text-center">
                   <p className="text-sm text-gray-500">Final Score</p>
                   <p className="text-2xl font-bold text-indigo-600">
                     {game.statistics.correctAnswers} / {game.statistics.totalQuestions}

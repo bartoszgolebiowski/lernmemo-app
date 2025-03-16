@@ -2,7 +2,6 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 import { db } from "~/db/index";
-import { auth } from "~/lib/auth.server";
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { createGameService } from "~/lib/services/gameService";
 import { createStatisticsService } from "~/lib/services/statisticsService";
@@ -13,6 +12,7 @@ import { StatisticCard } from "~/components/dashboard/StatisticCard";
 import { QuickReviewPanel } from "~/components/dashboard/QuickReviewPanel";
 import { EmptyState } from "~/components/dashboard/EmptyState";
 import { ImportSection } from "~/components/dashboard/ImportSection";
+import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Dashboard - Lernmemo App" }];
@@ -20,26 +20,18 @@ export const meta: MetaFunction = () => {
 
 // This is a placeholder for actual auth checking
 // You would replace this with your actual auth logic
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
-
-  const userId = session.user.id;
-  const username = session.user.name;
-  const email = session.user.email;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
   // Get real user statistics using the statistics service
   const statisticsService = createStatisticsService(db);
   const stats = await statisticsService.getUserStats(userId);
 
   return json({
-    user: {
-      name: username,
-      email: email,
-    },
     stats: {
       cardsReviewedToday: stats.cardsReviewedToday,
       cardsAvailable: stats.cardsAvailable,
@@ -48,15 +40,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   });
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  // Validate user session
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
-
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
   // Use GameService to create a new game
   const gameService = createGameService(db);
@@ -79,13 +68,13 @@ const DEFAULT_VALUES = {
 } as const;
 
 export default function Dashboard() {
-  const { user, stats } = useLoaderData<typeof loader>();
+  const { stats } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
     <main className="py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <DashboardHeader name={user.name} />
+        <DashboardHeader />
 
         {stats.cardsAvailable > 0 ? (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

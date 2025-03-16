@@ -1,7 +1,6 @@
 import { json, redirect } from "@remix-run/node";
 import { useNavigate, Form, useLoaderData } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { auth } from '~/lib/auth.server';
 import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
 import { z } from 'zod';
@@ -9,6 +8,7 @@ import { createAttachmentService } from "~/lib/services/attachmentService";
 import { createGameService } from "~/lib/services/gameService";
 import { createCsvImportService } from "~/lib/services/csvImportService";
 import React, { useState } from 'react';
+import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [
@@ -17,14 +17,12 @@ export const meta: MetaFunction = () => {
 };
 
 // Check for authentication same as in dashboard
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
-
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
   // Get uncompleted games
   const gameService = createGameService(db);
@@ -67,18 +65,15 @@ const closeReviewSchema = zfd.formData({
   gameId: zfd.text(z.string().uuid()),
 });
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  // Validate user session
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
-
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
   // Process form data
-  const formData = await request.formData();
+  const formData = await args.request.formData();
   const type = formData.get('type');
 
   if (type === 'start') {
@@ -121,11 +116,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   return json({ errors: 'Invalid action type' }, { status: 400 });
 };
-
-const DEFAULT_VALUES = {
-  cards: 10,
-  questions: 20,
-} as const;
 
 export default function ReviewPage() {
   const { uncompletedGames, attachmentsWithTranslations } = useLoaderData<typeof loader>();

@@ -5,15 +5,13 @@ import {
   primaryKey,
 } from "drizzle-orm/sqlite-core";
 import { v4 as uuidv4 } from "uuid";
-import { user } from "./better-auth";
 
 export const flashcardAttachment = sqliteTable("flashcard_attachment", {
   attachmentId: text("attachment_id")
     .primaryKey()
     .$defaultFn(() => uuidv4()),
   userId: text("user_id")
-    .notNull()
-    .references(() => user.id),
+    .notNull(),
   fileLocation: text("file_location").notNull(),
   importedAt: text("imported_at").$default(() => new Date().toISOString()),
   deactivatedAt: text("deactivated_at"),
@@ -48,8 +46,7 @@ export const flashcardGame = sqliteTable("flashcard_game", {
     .primaryKey()
     .$defaultFn(() => uuidv4()),
   userId: text("user_id")
-    .notNull()
-    .references(() => user.id),
+    .notNull(),
   createdAt: text("created_at").$default(() => new Date().toISOString()),
   completedAt: text("completed_at"),
   attachmentId: text("attachment_id")

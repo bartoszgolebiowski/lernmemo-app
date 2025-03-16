@@ -1,5 +1,5 @@
+import { SignOutButton } from '@clerk/remix';
 import { Link } from '@remix-run/react';
-import { SignOutButton } from './SignOutButton';
 
 export function Header() {
   return (
@@ -21,7 +21,11 @@ export function Header() {
               </Link>
             </nav>
             <div className="ml-4">
-              <SignOutButton className="text-sm" />
+              <SignOutButton >
+                <button className="bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium">
+                  Sign Out
+                </button>
+              </SignOutButton>
             </div>
           </div>
         </div>

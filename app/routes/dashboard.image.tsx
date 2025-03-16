@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { json, redirect } from "@remix-run/node";
 import { useFetcher, useNavigate } from "@remix-run/react";
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
@@ -7,9 +7,9 @@ import { createGeminiService } from '~/lib/services/imageToCsvService';
 import { createFileStorageService } from '~/lib/services/fileStorageService';
 import { createCsvImportService } from '~/lib/services/csvImportService';
 import { db } from '~/db/index';
-import { auth } from '~/lib/auth.server';
 import { zfd } from 'zod-form-data';
 import { createGameService } from '~/lib/services/gameService';
+import { getAuth } from '@clerk/remix/ssr.server';
 
 export const meta: MetaFunction = () => {
   return [
@@ -39,18 +39,18 @@ const DEFAULT_VALUES = {
   questions: 20,
 } as const;
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  })
-  if (!session) return redirect("/login");
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
+
   const aiService = createGeminiService();
   const fileServie = createFileStorageService();
   const csvService = createCsvImportService(db)
 
-  const validation = actionSchema.safeParse(await request.formData());
+  const validation = actionSchema.safeParse(await args.request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
 
   const { language, file, quickGame } = validation.data;
@@ -59,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const text = await aiService.imageToText(tmpFilePath, language)
   const csvText = await aiService.textToCsvFormat(text)
   const resultImprot = await csvService.importTranslationsFromCsv(csvText, file.name, userId, language);
-  
+
   if (quickGame === "true") {
     // Use GameService to create a new game
     const gameService = createGameService(db);
@@ -71,7 +71,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
   }
 
-  return redirect("/dashboard/cards");
+  return redirect("/dashboard/review");
 };
 
 export default function ImportImagePage() {

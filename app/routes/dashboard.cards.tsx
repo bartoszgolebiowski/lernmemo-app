@@ -1,28 +1,24 @@
-import { format } from "date-fns";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData, Form } from "@remix-run/react";
 import { z } from "zod";
 import { zfd } from "zod-form-data";
 import { db } from "~/db/index";
-import { auth } from "~/lib/auth.server";
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { ImportSection } from "~/components/dashboard/ImportSection";
 import React, { useState } from 'react';
+import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Manage Cards - Lernmemo App" }];
 };
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // Validate user session
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
-
-  const userId = session.user.id;
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
   // Get all attachments for the user
   const attachmentService = createAttachmentService(db);
@@ -47,16 +43,14 @@ const toggleActionSchema = zfd.formData({
   attachmentId: zfd.text(z.string().uuid()),
 })
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  // Validate user session
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
-  const userId = session.user.id;
-  const formData = await request.formData();
+  const formData = await args.request.formData();
   const validation = toggleActionSchema.safeParse(formData);
 
   if (!validation.success) {
@@ -104,11 +98,11 @@ export default function ManageCardsPage() {
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-gray-900">Manage Your Flashcards</h1>
           <p className="mt-1 text-sm text-gray-500">
-            View and manage all your imported flashcard sets. You can see details of each set, 
+            View and manage all your imported flashcard sets. You can see details of each set,
             temporarily disable sets you don't need right now, or add new cards through our import options.
           </p>
-          
-  
+
+
         </div>
 
         <div className="flex justify-between items-center mb-6 flex-wrap">
@@ -179,8 +173,8 @@ export default function ManageCardsPage() {
                                   <button
                                     type="submit"
                                     className={`inline-flex items-center px-3 py-1.5 rounded-md ${attachment.isActive
-                                        ? "bg-orange-100 text-orange-700 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                        : "bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                      ? "bg-orange-100 text-orange-700 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                      : "bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
                                       }`}
                                   >
                                     <span className="mr-1">

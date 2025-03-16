@@ -2,12 +2,12 @@ import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { useReducer } from "react";
-import { auth } from '~/lib/auth.server';
 import { db } from '~/db/index';
 import { createGameService } from "~/lib/services/gameService";
 import { gameActions, gameReducer, initialize } from "~/reducers/gameReducer";
 import { z } from "zod";
 import ReviewComplete from "~/components/ReviewComplete";
+import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [
@@ -15,16 +15,14 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  // Authentication check
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
-  const userId = session.user.id;
-  const gameId = params.id;
+  const gameId = args.params.id;
 
   if (!gameId) {
     return redirect("/dashboard/review");
@@ -66,17 +64,17 @@ const answersSchema = z.object({
   selectedTranslationId: z.string().uuid(),
 })
 
-export async function action({ request, params }: ActionFunctionArgs) {
-  const session = await auth.api.getSession({
-    headers: request.headers,
-  });
+export async function action(args: ActionFunctionArgs) {
+  const { userId } = await getAuth(args);
 
-  if (!session) return redirect("/login");
+  if (!userId) {
+    return redirect("/sign-in");
+  }
 
-  const gameId = params.id;
+  const gameId = args.params.id;
   if (!gameId) return json({ error: "Game ID is required" }, { status: 400 });
 
-  const formData = await request.formData();
+  const formData = await args.request.formData();
   const answersString = formData.get("answers") as string;
   const completedString = formData.get("completed") as string;
   if (!answersString) return json({ error: "Answers are required" }, { status: 400 });
