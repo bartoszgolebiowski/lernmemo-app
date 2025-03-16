@@ -166,7 +166,7 @@ export default function ReviewPage() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Created At
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" align="right" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Close
                       </th>
                     </tr>

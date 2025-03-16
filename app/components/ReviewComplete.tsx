@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "@remix-run/react";
+import { Link, useNavigate, useFetcher } from "@remix-run/react";
 
 interface ReviewCompleteProps {
   gameId: string;
@@ -10,6 +10,7 @@ interface ReviewCompleteProps {
 export default function ReviewComplete({ gameId, score, totalQuestions }: ReviewCompleteProps) {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(5);
+  const fetcher = useFetcher();
 
   // Calculate percentage score
   const percentage = Math.round((score / totalQuestions) * 100);
@@ -31,6 +32,13 @@ export default function ReviewComplete({ gameId, score, totalQuestions }: Review
     };
   }, []);
 
+  const handleTryAgain = () => {
+    fetcher.submit({}, {
+      method: "post",
+      action: `/dashboard/summary/${gameId}`
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
@@ -48,7 +56,15 @@ export default function ReviewComplete({ gameId, score, totalQuestions }: Review
           <div className="text-lg text-gray-600">Your score: {percentage}%</div>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-6 flex flex-col space-y-3">
+          <button
+            onClick={handleTryAgain}
+            className="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition"
+            disabled={fetcher.state !== "idle"}
+          >
+            {fetcher.state !== "idle" ? "Loading..." : "Try Again"}
+          </button>
+          
           <Link
             to={`/dashboard/summary/${gameId}`}
             className="text-indigo-600 hover:text-indigo-800 font-medium"

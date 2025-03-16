@@ -5,17 +5,37 @@ type Props = {
     onSubmit: (language: string, file: File, quickGame: boolean) => void;
 }
 
+type FormErrors = {
+    language?: string;
+    file?: string;
+    general?: string;
+}
+
 const ImportImage = (props: Props) => {
     const { onSubmit } = props;
     const [language, setLanguage] = useState<string>('');
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [touched, setTouched] = useState<Record<string, boolean>>({});
     const [isPasting, setIsPasting] = useState<boolean>(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const dropAreaRef = useRef<HTMLDivElement>(null);
+
+    // Clear field-specific errors when the field value changes
+    useEffect(() => {
+        if (language && errors.language) {
+            setErrors(prev => ({ ...prev, language: undefined }));
+        }
+    }, [language, errors.language]);
+    
+    useEffect(() => {
+        if (file && errors.file) {
+            setErrors(prev => ({ ...prev, file: undefined }));
+        }
+    }, [file, errors.file]);
 
     // Add paste event listener
     useEffect(() => {
@@ -36,6 +56,7 @@ const ImportImage = (props: Props) => {
                                 { type: blob.type }
                             );
                             validateAndSetFile(pastedFile);
+                            setTouched(prev => ({ ...prev, file: true }));
                         }
                         setIsPasting(false);
                         break;
@@ -55,19 +76,21 @@ const ImportImage = (props: Props) => {
 
     const handleLanguageChange = (e: ChangeEvent<HTMLSelectElement>) => {
         setLanguage(e.target.value);
-        setError(null);
+        setTouched(prev => ({ ...prev, language: true }));
     };
 
     const validateAndSetFile = (selectedFile: File) => {
         // Check if file is an image type
         if (!selectedFile.type.startsWith('image/')) {
-            setError('Please upload an image file (JPEG, PNG, etc)');
+            setErrors(prev => ({ 
+                ...prev, 
+                file: 'Please upload a valid image file (JPEG, PNG, etc)' 
+            }));
             return;
         }
 
         // Update file state
         setFile(selectedFile);
-        setError(null);
 
         // Clean up previous URL if exists
         if (preview) {
@@ -81,6 +104,7 @@ const ImportImage = (props: Props) => {
 
     const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
+            setTouched(prev => ({ ...prev, file: true }));
             validateAndSetFile(e.target.files[0]);
         }
     };
@@ -101,26 +125,43 @@ const ImportImage = (props: Props) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragging(false);
+        setTouched(prev => ({ ...prev, file: true }));
 
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
             validateAndSetFile(e.dataTransfer.files[0]);
         }
     };
 
+    const validateForm = (): boolean => {
+        const newErrors: FormErrors = {};
+        let isValid = true;
+
+        // Check language field
+        if (!language) {
+            newErrors.language = 'Please select a target language for the text in your image';
+            isValid = false;
+        }
+
+        // Check file field
+        if (!file) {
+            newErrors.file = 'Please upload an image containing the text you want to extract';
+            isValid = false;
+        }
+
+        setErrors(newErrors);
+        setTouched({ language: true, file: true });
+        
+        return isValid;
+    };
+
     const handleSubmit = (e: FormEvent<HTMLFormElement>, quickGame: boolean) => {
         e.preventDefault();
 
-        if (!language) {
-            setError('Please select a language');
+        if (!validateForm()) {
             return;
         }
 
-        if (!file) {
-            setError('Please upload an image file');
-            return;
-        }
-
-        if (onSubmit) {
+        if (onSubmit && file && language) {
             onSubmit(language, file, quickGame);
         }
     };
@@ -138,15 +179,22 @@ const ImportImage = (props: Props) => {
             <Form method="post" className="space-y-6">
                 {/* Language Selection */}
                 <div className="mb-4">
-                    <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
-                        Select Language
+                    <label 
+                        htmlFor="language" 
+                        className={`block text-sm font-medium ${errors.language && touched.language ? 'text-red-700' : 'text-gray-700'} mb-1`}
+                    >
+                        Select Language *
                     </label>
                     <select
                         id="language"
                         name="language"
                         value={language}
                         onChange={handleLanguageChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className={`w-full px-3 py-2 border ${
+                            errors.language && touched.language 
+                                ? 'border-red-500 focus:ring-red-500' 
+                                : 'border-gray-300 focus:ring-blue-500'
+                        } rounded-md focus:outline-none focus:ring-2`}
                     >
                         <option value="">Choose a language</option>
                         <option value="german">German</option>
@@ -154,14 +202,20 @@ const ImportImage = (props: Props) => {
                         <option value="french">French</option>
                         <option value="italian">Italian</option>
                     </select>
+                    {errors.language && touched.language && (
+                        <p className="mt-1 text-sm text-red-600">{errors.language}</p>
+                    )}
                 </div>
 
                 {/* File Upload with Drag & Drop */}
                 <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="imageFile">
-                        Upload Image File
+                    <label 
+                        className={`block text-sm font-medium ${errors.file && touched.file ? 'text-red-700' : 'text-gray-700'} mb-1`} 
+                        htmlFor="imageFile"
+                    >
+                        Upload Image File *
                     </label>
-                    <div className="mt-4 text-xs text-gray-500 mb-4">
+                    <div className="mt-2 text-xs text-gray-500 mb-4">
                         <p className="mt-1">
                             <strong>Pro tip:</strong> You can paste screenshots directly from your clipboard using Ctrl+V (Cmd+V on Mac).
                         </p>
@@ -170,8 +224,15 @@ const ImportImage = (props: Props) => {
                         ref={dropAreaRef}
                         role="button"
                         tabIndex={0}
-                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors 
-                        ${isDragging ? 'border-blue-500 bg-blue-50' : isPasting ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-gray-400'}`}
+                        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                            isDragging 
+                                ? 'border-blue-500 bg-blue-50' 
+                                : isPasting 
+                                    ? 'border-green-500 bg-green-50' 
+                                    : errors.file && touched.file
+                                        ? 'border-red-300 hover:border-red-400' 
+                                        : 'border-gray-300 hover:border-gray-400'
+                        }`}
                         onDragOver={handleDragOver}
                         onDragLeave={handleDragLeave}
                         onDrop={handleDrop}
@@ -187,7 +248,7 @@ const ImportImage = (props: Props) => {
                         />
                         <div className="flex flex-col items-center justify-center">
                             <svg
-                                className="h-12 w-12 text-gray-400 mb-3"
+                                className={`h-12 w-12 ${errors.file && touched.file ? 'text-red-400' : 'text-gray-400'} mb-3`}
                                 stroke="currentColor"
                                 fill="none"
                                 viewBox="0 0 48 48"
@@ -211,6 +272,9 @@ const ImportImage = (props: Props) => {
                             )}
                         </div>
                     </div>
+                    {errors.file && touched.file && (
+                        <p className="mt-1 text-sm text-red-600">{errors.file}</p>
+                    )}
                 </div>
 
                 {/* Image Preview */}
@@ -230,10 +294,10 @@ const ImportImage = (props: Props) => {
                     </div>
                 )}
 
-                {/* Error Message */}
-                {error && (
-                    <div className="text-red-500 text-sm mt-1">
-                        {error}
+                {/* General Error Message */}
+                {errors.general && (
+                    <div className="text-red-500 text-sm p-3 bg-red-50 border border-red-200 rounded-md">
+                        {errors.general}
                     </div>
                 )}
 
@@ -242,11 +306,10 @@ const ImportImage = (props: Props) => {
                     <button
                         type="submit"
                         className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors 
-                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                        disabled={!file || !language}
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300"
                         onClick={(e) => {
                             e.preventDefault();
-                            if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, false);
+                            handleSubmit(e as unknown as FormEvent<HTMLFormElement>, false);
                         }}
                     >
                         Extract Words
@@ -254,11 +317,10 @@ const ImportImage = (props: Props) => {
                     <button
                         type="button"
                         className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors 
-                        focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                        disabled={!file || !language}
+                        focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:bg-blue-300"
                         onClick={(e) => {
                             e.preventDefault();
-                            if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, true);
+                            handleSubmit(e as unknown as FormEvent<HTMLFormElement>, true);
                         }}
                     >
                         Extract Words & Quick Flashcards
@@ -271,7 +333,6 @@ const ImportImage = (props: Props) => {
                         For best results, upload clear images with visible text. Our system will extract words
                         that you can turn into flashcards.
                     </p>
-
                 </div>
             </Form>
         </div>

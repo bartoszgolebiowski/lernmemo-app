@@ -102,28 +102,25 @@ export default function ManageCardsPage() {
             temporarily disable sets you don't need right now, or add new cards through our import options.
           </p>
 
-
         </div>
 
-        <div className="flex justify-between items-center mb-6 flex-wrap">
-          <ImportSection
-            title="Take a Picture"
-            description="Extract vocabulary directly from textbooks, articles, or any image containing text. Our system will analyze the image and create flashcards from the detected words."
-            linkText="Take a Picture"
-            linkHref="/dashboard/image"
-            icon="camera"
-            className="mt-4"
-          />
+        <ImportSection
+          title="Take a Picture"
+          description="Extract vocabulary directly from textbooks, articles, or any image containing text. Our system will analyze the image and create flashcards from the detected words."
+          linkText="Take a Picture"
+          linkHref="/dashboard/image"
+          icon="camera"
+          className="mt-4"
+        />
 
-          <ImportSection
-            title="Import with CSV"
-            description="Import your flashcards from CSV files to quickly build your learning deck. Supported formats include language learning vocabulary lists with term and definition columns."
-            linkText="Import CSV"
-            linkHref="/dashboard/import"
-            icon="upload"
-            className="mt-8"
-          />
-        </div>
+        <ImportSection
+          title="Import with CSV"
+          description="Import your flashcards from CSV files to quickly build your learning deck. Supported formats include language learning vocabulary lists with term and definition columns."
+          linkText="Import CSV"
+          linkHref="/dashboard/import"
+          icon="upload"
+          className="my-8"
+        />
 
         {actionData?.message && (
           <div className={`p-4 mb-4 rounded-md ${actionData.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
@@ -131,7 +128,7 @@ export default function ManageCardsPage() {
           </div>
         )}
 
-        {attachments && attachments.length > 0 ? (
+        {attachments && attachments.length > 0 && (
           <div className="flex flex-col">
             <div className="-my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="py-2 align-middle inline-block min-w-full sm:px-6 lg:px-8">
@@ -238,26 +235,6 @@ export default function ManageCardsPage() {
               </div>
             </div>
           </div>
-        ) : (
-          <>
-            <ImportSection
-              title="Take a Picture"
-              description="Extract vocabulary directly from textbooks, articles, or any image containing text. Our system will analyze the image and create flashcards from the detected words."
-              linkText="Take a Picture"
-              linkHref="/dashboard/image"
-              icon="camera"
-              className="mt-4"
-            />
-
-            <ImportSection
-              title="Import with CSV"
-              description="Import your flashcards from CSV files to quickly build your learning deck. Supported formats include language learning vocabulary lists with term and definition columns."
-              linkText="Import CSV"
-              linkHref="/dashboard/import"
-              icon="upload"
-              className="mt-8"
-            />
-          </>
         )}
       </div>
     </main>

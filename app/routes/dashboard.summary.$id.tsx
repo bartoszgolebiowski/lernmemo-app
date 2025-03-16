@@ -1,6 +1,6 @@
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
-import type { MetaFunction, LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData, useNavigate, Form } from "@remix-run/react";
+import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { db } from '~/db/index';
 import { createGameService } from "~/lib/services/gameService";
 import { getAuth } from "@clerk/remix/ssr.server";
@@ -63,12 +63,37 @@ export const loader = async (args: LoaderFunctionArgs) => {
   }
 };
 
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    return redirect("/sign-in");
+  }
+
+  const gameId = args.params.id;
+
+  if (!gameId) {
+    return redirect("/dashboard/review");
+  }
+
+  // Create a new game based on the current one
+  try {
+    const gameService = createGameService(db);
+    const { gameId: newGameId } = await gameService.recreateGame(gameId, userId);
+    
+    // Redirect to the new game
+    return redirect(`/dashboard/game/${newGameId}`);
+  } catch (error) {
+    console.error("Error recreating game:", error);
+    return json({ error: "Failed to recreate game" }, { status: 500 });
+  }
+};
+
 export default function Summary() {
   const { game } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
   return (
-
     <div className="min-h-screen bg-gray-100 py-6">
       <main className="py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -87,12 +112,23 @@ export default function Summary() {
               ← Back to Dashboard
             </button>
 
-            <button
-              onClick={() => navigate("/dashboard/review")}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              Play Again
-            </button>
+            <div className="flex space-x-3">
+              <Form method="post">
+                <button
+                  type="submit"
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                >
+                  Replay This Set
+                </button>
+              </Form>
+              
+              <button
+                onClick={() => navigate("/dashboard/review")}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                Practice New Cards
+              </button>
+            </div>
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">

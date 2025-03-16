@@ -145,6 +145,79 @@ export class GameService {
   }
 
   /**
+   * Creates a new game identical to an existing game
+   * @param gameId ID of the existing game to duplicate
+   * @param userId User ID
+   * @returns Object containing the new gameId
+   */
+  async recreateGame(gameId: string, userId: string) {
+    try {
+      return await this.db.transaction(async (tx) => {
+        // Find the original game
+        const originalGames = await tx
+          .select()
+          .from(flashcardGame)
+          .where(
+            and(
+              eq(flashcardGame.gameId, gameId),
+              eq(flashcardGame.userId, userId)
+            )
+          );
+
+        if (!originalGames.length) {
+          throw new Error("Original game not found");
+        }
+
+        const originalGame = originalGames[0];
+
+        // Create a new game with the same attachment
+        const newGames = await tx
+          .insert(flashcardGame)
+          .values({
+            userId,
+            attachmentId: originalGame.attachmentId,
+            flashcards: originalGame.flashcards,
+            questions: originalGame.questions,
+          })
+          .returning();
+
+        if (!newGames.length) {
+          throw new Error("Failed to create new game");
+        }
+
+        const newGameId = newGames[0].gameId;
+
+        // Get all translations from the original game
+        const originalTranslations = await tx
+          .select()
+          .from(flashcardGameTranslation)
+          .where(eq(flashcardGameTranslation.gameId, gameId));
+
+        // Add the same translations to the new game
+        const inserts: Promise<unknown>[] = [];
+        for (const translation of originalTranslations) {
+          inserts.push(
+            tx
+              .insert(flashcardGameTranslation)
+              .values({
+                gameId: newGameId,
+                translationId: translation.translationId,
+              })
+              .execute()
+          );
+        }
+
+        await Promise.all(inserts);
+
+        return { gameId: newGameId };
+      });
+    } catch (e) {
+      console.error("Error recreating game:", e);
+      throw new Error("Failed to recreate game");
+    }
+  }
+
+  /**
    * Submit multiple answers and complete the game in a single transaction
    */
   async submitAnswers(
