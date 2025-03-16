@@ -57,10 +57,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   })
 };
 
-const actionSchema = zfd.formData({
+const startReviewSchema = zfd.formData({
   cards: zfd.numeric(z.number().positive()),
   questions: zfd.numeric(z.number().positive()),
   attachmentId: zfd.text(z.string().uuid()),
+});
+
+const closeReviewSchema = zfd.formData({
+  gameId: zfd.text(z.string().uuid()),
 });
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -75,22 +79,47 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Process form data
   const formData = await request.formData();
-  const validation = actionSchema.safeParse(formData);
+  const type = formData.get('type');
 
-  if (!validation.success) {
-    return json({ errors: validation.error.format() }, { status: 400 });
+  if (type === 'start') {
+    const validation = startReviewSchema.safeParse(formData);
+
+    if (!validation.success) {
+      return json({ errors: validation.error.format() }, { status: 400 });
+    }
+
+    const { cards, questions, attachmentId } = validation.data;
+
+    // Use GameService to create a new game
+    const gameService = createGameService(db);
+    try {
+      const result = await gameService.createGame(attachmentId, userId, cards, questions);
+      return redirect(`/dashboard/game/${result.gameId}`);
+    } catch (error) {
+      return json({ errors: 'Failed to create game' }, { status: 500 });
+    }
   }
 
-  const { cards, questions, attachmentId } = validation.data;
+  if (type === 'close') {
+    const validation = closeReviewSchema.safeParse(formData);
 
-  // Use GameService to create a new game
-  const gameService = createGameService(db);
-  try {
-    const result = await gameService.createGame(attachmentId, userId, cards, questions);
-    return redirect(`/dashboard/game/${result.gameId}`);
-  } catch (error) {
-    return json({ errors: 'Failed to create game' }, { status: 500 });
+    if (!validation.success) {
+      return json({ errors: validation.error.format() }, { status: 400 });
+    }
+
+    const { gameId } = validation.data;
+
+    // Use GameService to close the game
+    const gameService = createGameService(db);
+    try {
+      await gameService.completeGame(gameId);
+      return json({ success: true });
+    } catch (error) {
+      return json({ errors: 'Failed to close game' }, { status: 500 });
+    }
   }
+
+  return json({ errors: 'Invalid action type' }, { status: 400 });
 };
 
 const DEFAULT_VALUES = {
@@ -147,6 +176,9 @@ export default function ReviewPage() {
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Created At
                       </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Close
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -155,13 +187,30 @@ export default function ReviewPage() {
                         <td align="left" className="px-6 py-4 whitespace-nowrap text-left">
                           <button
                             onClick={() => navigate(`/dashboard/game/${game.gameId}`)}
-                            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                           >
-                            Join Review
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                            </svg>
+                            Continue
                           </button>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          { game.createdAt}
+                          {game.createdAt}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <Form method="post">
+                            <input type="hidden" name="type" value="close" />
+                            <input type="hidden" name="gameId" value={game.gameId} />
+                            <button
+                              type="submit"
+                              className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </Form>
                         </td>
                       </tr>
                     ))}
@@ -173,8 +222,9 @@ export default function ReviewPage() {
 
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <Form method="post" encType="multipart/form-data">
+              <input type="hidden" id="type" name="type" value="start" />
               <input type="hidden" id="cards" name="cards" value={DEFAULT_VALUES.cards} />
-              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} /> 
+              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} />
               <div className="mb-6">
                 <span className="block text-sm font-medium text-gray-700 mb-2">
                   Select Attachment
@@ -211,9 +261,12 @@ export default function ReviewPage() {
                                   name="attachmentId"
                                   value={attachment.attachmentId}
                                   disabled={attachmentsWithTranslations.length === 0}
-                                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                                  className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
                                 >
-                                  Start Review
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                  </svg>
+                                  Start
                                 </button>
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -229,10 +282,24 @@ export default function ReviewPage() {
                                 <button
                                   type="button"
                                   onClick={() => toggleExpand(attachment.attachmentId)}
-                                  className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                                  className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                                   aria-label={expandedAttachments.has(attachment.attachmentId) ? 'Hide Flashcards' : 'Show Flashcards'}
                                 >
-                                  {expandedAttachments.has(attachment.attachmentId) ? 'Hide 🔼' : 'Expand 🔽'}
+                                  {expandedAttachments.has(attachment.attachmentId) ? (
+                                    <>
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                                      </svg>
+                                      Hide
+                                    </>
+                                  ) : (
+                                    <>
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                      </svg>
+                                      Expand
+                                    </>
+                                  )}
                                 </button>
                               </td>
                             </tr>
@@ -274,8 +341,11 @@ export default function ReviewPage() {
                                       type="submit"
                                       name="attachmentId"
                                       value={attachment.attachmentId}
-                                      className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                                      className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                                     >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                      </svg>
                                       Start Review with this Set
                                     </button>
                                   </td>

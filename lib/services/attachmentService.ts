@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { DrizzleDatabase } from "~/db/index";
 import { flashcardAttachment } from "~/db/schema/flashcard";
 
@@ -41,6 +41,27 @@ export class AttachmentService {
             eq(flashcardAttachment.userId, userId)
           )
         );
+
+      if (!attachments.length) {
+        return null;
+      }
+
+      return attachments[0];
+    } catch (e) {
+      console.error("Error fetching attachment:", e);
+      throw new Error("Failed to fetch attachment");
+    }
+  }
+
+  // get last attachment by user id
+  async getLastAttachmentByUserId(userId: string) {
+    try {
+      const attachments = await this.db
+        .select()
+        .from(flashcardAttachment)
+        .where(eq(flashcardAttachment.userId, userId))
+        .orderBy(desc(flashcardAttachment.importedAt))
+        .limit(1);
 
       if (!attachments.length) {
         return null;

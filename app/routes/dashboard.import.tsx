@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { json, redirect } from "@remix-run/node";
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useFetcher } from "@remix-run/react";
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import ImportCSV from "~/components/ImportCSV";
 import ExampleCSVDownload from "~/components/ExampleCSVDownload";
@@ -71,41 +71,35 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
 export default function ImportPage() {
   const navigate = useNavigate();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fetcher = useFetcher();
+  const isSubmitting = fetcher.state !== 'idle';
+
+  // Add useEffect for navigation after form submission completes
+  useEffect(() => {
+    if (fetcher.data?.gameId) {
+      navigate(`/dashboard/game/${fetcher.data.gameId}`);
+      return
+    }
+    if (fetcher.state === 'idle' && fetcher.data && !fetcher.data?.gameId) {
+      navigate('/dashboard');
+      return;
+    }
+  }, [fetcher.data, fetcher.state]);
 
   const handleImportSubmit = async (language: string, file: File, quickGame: boolean) => {
-    setIsSubmitting(true);
-    try {
-      // Create FormData to send the file to the server
-      const formData = new FormData();
-      formData.append("language", language);
-      formData.append("file", file);
-      if (quickGame) {
-        formData.append("quickGame", "true");
-      }
-
-      // Send the file to your backend
-      const response = await fetch("/dashboard/import", {
-        method: "POST",
-        body: formData
-      });
-      if (response.ok) {
-        // Redirect to the game if quickGame is true
-        const { gameId } = await response.json();
-        if (gameId) {
-          navigate(`/dashboard/game/${gameId}`);
-        } else {
-          navigate("/dashboard");
-        }
-      } else {
-        // Handle error
-        console.error("Error importing image");
-        setIsSubmitting(false);
-      }
-    } catch (error) {
-      console.error("Error:", error);
-      setIsSubmitting(false);
+    const formData = new FormData();
+    formData.append("language", language);
+    formData.append("file", file);
+    if (quickGame) {
+      formData.append("quickGame", "true");
     }
+
+    // Use fetcher.submit instead of raw fetch
+    fetcher.submit(formData, {
+      method: "post",
+      encType: "multipart/form-data",
+      action: "/dashboard/import"
+    });
   };
 
   return (
