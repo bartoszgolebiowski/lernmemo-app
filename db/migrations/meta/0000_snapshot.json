@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "123c180d-ac7b-4774-85c6-929e7fc503a7",
+  "id": "d8fd2245-bbd2-49c9-b1c2-050fbfa72fae",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "account": {
@@ -339,8 +339,7 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": "'CURRENT_TIMESTAMP'"
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -380,13 +379,12 @@
           "notNull": true,
           "autoincrement": false
         },
-        "start_at": {
-          "name": "start_at",
+        "created_at": {
+          "name": "created_at",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
-          "default": "'CURRENT_TIMESTAMP'"
+          "autoincrement": false
         },
         "completed_at": {
           "name": "completed_at",
@@ -399,7 +397,7 @@
           "name": "attachment_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "cards": {

@@ -9,6 +9,7 @@ import { auth } from '~/lib/auth.server';
 import { createCsvImportService } from '~/lib/services/csvImportService';
 import { createFileStorageService } from '~/lib/services/fileStorageService';
 import { zfd } from 'zod-form-data';
+import { createGameService } from '~/lib/services/gameService';
 
 export const meta: MetaFunction = () => {
   return [
@@ -30,7 +31,13 @@ export const loader = async () => {
 const actionSchema = zfd.formData({
   language: zfd.text(),
   file: zfd.file(),
+  quickGame: zfd.text().optional(),
 });
+
+const DEFAULT_VALUES = {
+  cards: 10,
+  questions: 20,
+} as const;
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const session = await auth.api.getSession({
@@ -47,7 +54,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const { language, file } = validation.data;
   const csvFile = await fileService.toString(file);
-  const result = await csvService.importTranslationsFromCsv(csvFile, file.name, userId, language);
+  const resultImprot = await csvService.importTranslationsFromCsv(csvFile, file.name, userId, language);
+
+  if (validation.data.quickGame === "true") {
+    // Use GameService to create a new game
+    const gameService = createGameService(db);
+    try {
+      const result = await gameService.createGame(resultImprot.attachment.attachmentId, userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+      return json({ gameId: result.gameId });
+    } catch (error) {
+      return json({ errors: 'Failed to create game' }, { status: 500 });
+    }
+  }
   return redirect("/dashboard");
 };
 
@@ -55,26 +73,33 @@ export default function ImportPage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleImportSubmit = async (language: string, file: File) => {
+  const handleImportSubmit = async (language: string, file: File, quickGame: boolean) => {
     setIsSubmitting(true);
     try {
       // Create FormData to send the file to the server
       const formData = new FormData();
       formData.append("language", language);
       formData.append("file", file);
+      if (quickGame) {
+        formData.append("quickGame", "true");
+      }
 
       // Send the file to your backend
       const response = await fetch("/dashboard/import", {
         method: "POST",
         body: formData
       });
-
       if (response.ok) {
-        // If successful, navigate back to dashboard
-        navigate("/dashboard");
+        // Redirect to the game if quickGame is true
+        const { gameId } = await response.json();
+        if (gameId) {
+          navigate(`/dashboard/game/${gameId}`);
+        } else {
+          navigate("/dashboard");
+        }
       } else {
         // Handle error
-        console.error("Error importing file");
+        console.error("Error importing image");
         setIsSubmitting(false);
       }
     } catch (error) {

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { DrizzleDatabase } from "~/db/index";
 import {
   flashcardGame,
@@ -10,6 +10,25 @@ import {
 
 export class GameService {
   constructor(private db: DrizzleDatabase) {}
+
+  async getUncompletedGames(userId: string) {
+    try {
+      const games = await this.db
+        .select()
+        .from(flashcardGame)
+        .where(
+          and(
+            isNull(flashcardGame.completedAt),
+            eq(flashcardGame.userId, userId)
+          )
+        );
+
+      return games;
+    } catch (e) {
+      console.error("Error fetching game:", e);
+      throw new Error("Failed to fetch game");
+    }
+  }
 
   async getGameById(gameId: string, userId: string) {
     try {

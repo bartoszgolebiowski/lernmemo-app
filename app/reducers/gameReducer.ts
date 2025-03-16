@@ -4,99 +4,176 @@ interface Card {
   translationId: string | null;
 }
 
+interface PossibleAnswer {
+  translation: string;
+  translationId: string;
+}
+
 interface GameState {
-  selectedTranslation: string | null;
-  feedback: "correct" | "incorrect" | null;
   currentQuestion: string | null;
-  possibleAnswers: string[];
   correctAnswer: string | null;
+  selectedTranslationId: string | null;
   score: number;
   questionCount: number;
-  completedWords: string[];
-  currentTranslationId: string | null;
+  possibleAnswers: PossibleAnswer[];
+  completedWords: PossibleAnswer[];
 }
 
 type GameAction =
-  | { type: "REFRESH_CARDS"; payload: { cards: Card[]; maxQuestions: number } }
-  | { type: "SELECT_ANSWER"; payload: { translation: string } }
-  | { type: "RESET_SELECTION" };
+  | {
+      type: "NEXT_QUESTION";
+      payload: { cards: Card[]; maxQuestions: number; seed: number };
+    }
+  | { type: "SELECT_ANSWER"; payload: { translationId: string } };
 
 const initialState: GameState = {
-  selectedTranslation: null,
-  feedback: null,
   currentQuestion: null,
-  possibleAnswers: [],
   correctAnswer: null,
+  selectedTranslationId: null,
   score: 0,
   questionCount: 0,
   completedWords: [],
-  currentTranslationId: null,
+  possibleAnswers: [],
 };
+
+// Create a deterministic random number generator using a linear congruential generator (LCG)
+function createRandomFunction(
+  seed: number
+): (low: number, high: number) => number {
+  let state = seed;
+  const m = 0x100000000; // 2^32
+  const a = 1664525;
+  const c = 1013904223;
+
+  // Returns a function that generates a random integer in the range [low, high]
+  return function randomInRange(low: number, high: number): number {
+    state = (a * state + c) % m;
+    const randomFraction = state / m;
+    return Math.floor(randomFraction * (high - low + 1)) + low;
+  };
+}
+
+// Generic function to randomly sort (shuffle) an array using the deterministic random generator
+function sortArrayRandomly<T>(arr: T[], seed: number): T[] {
+  // Create our deterministic random function using the provided seed
+  const rand = createRandomFunction(seed);
+
+  // Map each element to an object that holds a random key and the original value
+  const arrWithKeys = arr.map((item) => ({
+    key: rand(0, 1000000), // Random key for sorting
+    value: item,
+  }));
+
+  // Sort the array based on the random key
+  arrWithKeys.sort((a, b) => a.key - b.key);
+
+  // Extract the original values in the new order
+  return arrWithKeys.map((item) => item.value);
+}
 
 export const initialize = (
   cards: Card[],
-  maxQuestions: number,
-  state = initialState
+  score: number,
+  questionCount: number,
+  seed: number
 ) => {
-  const availableCards = cards.filter(
-    (card) => !state.completedWords.includes(card.word!)
-  );
-
-  if (availableCards.length === 0 || state.questionCount >= maxQuestions) {
-    return state;
-  }
-
-  const randomIndex = Math.floor(Math.random() * availableCards.length);
+  const availableCards = cards;
+  const randomIndex = createRandomFunction(seed)(0, availableCards.length - 1);
   const questionCard = availableCards[randomIndex];
 
   const otherTranslations = cards
     .filter((card) => card.translation !== questionCard.translation)
-    .map((card) => card.translation);
+    .map((card) => ({
+      translation: card.translation!,
+      translationId: card.translationId!,
+    }));
 
-  const wrongAnswers = [...otherTranslations]
-    .sort(() => 0.5 - Math.random())
-    .slice(0, Math.min(3, otherTranslations.length));
-
-  const allAnswers = [questionCard.translation, ...wrongAnswers]
-    .filter((answer) => answer !== null)
-    .sort(() => 0.5 - Math.random());
+  const allAnswers = [
+    {
+      translation: questionCard.translation!,
+      translationId: questionCard.translationId!,
+    },
+    ...[...otherTranslations].slice(0, Math.min(3, otherTranslations.length)),
+  ];
 
   return {
-    ...state,
+    ...initialState,
     currentQuestion: questionCard.word!,
-    correctAnswer: questionCard.translation!,
-    possibleAnswers: allAnswers!,
-    currentTranslationId: questionCard.translationId!,
+    correctAnswer: questionCard.translationId!,
+    possibleAnswers: sortArrayRandomly(allAnswers, seed * randomIndex),
+    score,
+    questionCount,
   };
 };
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
-    case "REFRESH_CARDS": {
-      const { cards, maxQuestions } = action.payload;
-      return initialize(cards, maxQuestions, state);
+    case "NEXT_QUESTION": {
+      const { cards, maxQuestions, seed } = action.payload;
+
+      let availableCards = cards.filter(
+        (card) =>
+          !state.completedWords
+            .map((cw) => cw.translationId)
+            .includes(card.translationId!)
+      );
+
+      if (availableCards.length === 0) {
+        availableCards = cards;
+      }
+
+      if (state.questionCount >= maxQuestions) {
+        return state;
+      }
+
+      const questionCard = availableCards[seed % availableCards.length];
+
+      const otherTranslations = cards
+        .filter((card) => card.translation !== questionCard.translation)
+        .map((card) => ({
+          translation: card.translation!,
+          translationId: card.translationId!,
+        }));
+
+      const wrongAnswers = [...otherTranslations].slice(
+        0,
+        Math.min(3, otherTranslations.length)
+      );
+
+      const allAnswers = [
+        {
+          translation: questionCard.translation!,
+          translationId: questionCard.translationId!,
+        },
+        ...wrongAnswers,
+      ].filter((answer) => answer !== null);
+
+      return {
+        ...state,
+        currentQuestion: questionCard.word!,
+        correctAnswer: questionCard.translationId!,
+        possibleAnswers: sortArrayRandomly(allAnswers, seed),
+        selectedTranslationId: null,
+      };
     }
 
     case "SELECT_ANSWER": {
-      const isCorrect = action.payload.translation === state.correctAnswer;
+      const answer = state.possibleAnswers.find(
+        (a) => a.translationId === action.payload.translationId
+      );
+      if (!answer) throw new Error("Answer not found");
+
+      const isCorrect = action.payload.translationId === state.correctAnswer;
+
       const newCompletedWords = isCorrect
-        ? [...state.completedWords, state.currentQuestion!]
+        ? [...state.completedWords, answer!]
         : state.completedWords;
 
       return {
         ...state,
-        selectedTranslation: action.payload.translation,
-        feedback: isCorrect ? "correct" : "incorrect",
         score: isCorrect ? state.score + 1 : state.score,
         completedWords: newCompletedWords,
-      };
-    }
-
-    case "RESET_SELECTION": {
-      return {
-        ...state,
-        selectedTranslation: null,
-        feedback: null,
+        selectedTranslationId: action.payload.translationId,
         questionCount: state.questionCount + 1,
       };
     }
@@ -108,17 +185,17 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
 // Action Creators
 export const gameActions = {
-  refreshCards: (cards: Card[], maxQuestions: number): GameAction => ({
-    type: "REFRESH_CARDS",
-    payload: { cards, maxQuestions },
+  nextQuestion: (
+    cards: Card[],
+    maxQuestions: number,
+    seed: number
+  ): GameAction => ({
+    type: "NEXT_QUESTION",
+    payload: { cards, maxQuestions, seed },
   }),
 
-  selectAnswer: (translation: string): GameAction => ({
+  selectAnswer: (translationId: string): GameAction => ({
     type: "SELECT_ANSWER",
-    payload: { translation },
-  }),
-
-  resetSelection: (): GameAction => ({
-    type: "RESET_SELECTION",
+    payload: { translationId },
   }),
 };

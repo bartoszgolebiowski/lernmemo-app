@@ -49,7 +49,7 @@ export const flashcardGame = sqliteTable("flashcard_game", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id),
-  startAt: text("start_at").$default(() => new Date().toISOString()),
+  createdAt: text("created_at").$default(() => new Date().toISOString()),
   completedAt: text("completed_at"),
   attachmentId: text("attachment_id")
     .notNull()

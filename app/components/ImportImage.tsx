@@ -1,7 +1,8 @@
+import { Form } from '@remix-run/react';
 import { useState, useRef, DragEvent, ChangeEvent, FormEvent, useEffect } from 'react';
 
 type Props = {
-    onSubmit: (language: string, file: File) => void;
+    onSubmit: (language: string, file: File, quickGame: boolean) => void;
 }
 
 const ImportImage = (props: Props) => {
@@ -106,7 +107,7 @@ const ImportImage = (props: Props) => {
         }
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = (e: FormEvent<HTMLFormElement>, quickGame: boolean) => {
         e.preventDefault();
 
         if (!language) {
@@ -120,7 +121,7 @@ const ImportImage = (props: Props) => {
         }
 
         if (onSubmit) {
-            onSubmit(language, file);
+            onSubmit(language, file, quickGame);
         }
     };
 
@@ -134,7 +135,7 @@ const ImportImage = (props: Props) => {
         <div className="w-full max-w-lg mx-auto p-6 bg-white rounded-lg shadow-md">
             <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Import Image for Flashcards</h2>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <Form method="post" className="space-y-6">
                 {/* Language Selection */}
                 <div className="mb-4">
                     <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
@@ -236,15 +237,33 @@ const ImportImage = (props: Props) => {
                     </div>
                 )}
 
-                {/* Submit Button */}
-                <button
-                    type="submit"
-                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors 
-                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    disabled={!file || !language}
-                >
-                    Extract Words from Image
-                </button>
+                {/* Submit Buttons */}
+                <div className="space-y-3">
+                    <button
+                        type="submit"
+                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors 
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                        disabled={!file || !language}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, false);
+                        }}
+                    >
+                        Extract Words
+                    </button>
+                    <button
+                        type="button"
+                        className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors 
+                        focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                        disabled={!file || !language}
+                        onClick={(e) => {
+                            e.preventDefault();
+                            if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, true);
+                        }}
+                    >
+                        Extract Words & Quick Flashcards
+                    </button>
+                </div>
 
                 {/* Instructions */}
                 <div className="mt-4 text-xs text-gray-500">
@@ -254,7 +273,7 @@ const ImportImage = (props: Props) => {
                     </p>
 
                 </div>
-            </form>
+            </Form>
         </div>
     );
 };

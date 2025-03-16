@@ -69,7 +69,6 @@ export default function Summary() {
   const { game } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  console.log({ game })
   return (
 
     <div className="min-h-screen bg-gray-100 py-6">

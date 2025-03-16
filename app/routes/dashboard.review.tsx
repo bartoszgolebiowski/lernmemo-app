@@ -25,12 +25,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   if (!session) return redirect("/login");
 
   const userId = session.user.id;
+
+  // Get uncompleted games
+  const gameService = createGameService(db);
   const attachmentSservice = createAttachmentService(db);
   const importService = createCsvImportService(db);
   const attachments = await attachmentSservice.getUserAttachments(userId);
-  const translationsForAttachments = attachments.map(async (attachment) =>
+  const uncompletedGames = await gameService.getUncompletedGames(userId);
+  const translationsForAttachments = attachments.map((attachment) =>
     importService.getTranslationsFromAttachment(attachment.attachmentId)
   );
+
   const translations = await Promise.all(translationsForAttachments);
 
   const attachmentsWithTranslations = attachments.map((attachment, index) => ({
@@ -41,7 +46,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     targetLanguage: translations[index][0].flashcard_translation?.targetLanguage ?? 'Unknown',
   }));
 
+  const uncompletedGamesWithStringDate = uncompletedGames.map((game) => ({
+    ...game,
+    createdAt: new Date(game.createdAt!).toLocaleString(),
+  }))
+
   return json({
+    uncompletedGames: uncompletedGamesWithStringDate,
     attachmentsWithTranslations,
   })
 };
@@ -88,7 +99,7 @@ const DEFAULT_VALUES = {
 } as const;
 
 export default function ReviewPage() {
-  const { attachmentsWithTranslations } = useLoaderData<typeof loader>();
+  const { uncompletedGames, attachmentsWithTranslations } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
 
@@ -122,10 +133,48 @@ export default function ReviewPage() {
             </button>
           </div>
 
+          {/* Uncompleted Games Section */}
+          {uncompletedGames && uncompletedGames.length > 0 && (
+            <div className="bg-white p-6 rounded-lg shadow-md mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Continue Uncompleted Reviews</h2>
+              <div className="border rounded-md overflow-hidden">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Review
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created At
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {uncompletedGames.map((game) => (
+                      <tr key={game.gameId} className="hover:bg-gray-50">
+                        <td align="left" className="px-6 py-4 whitespace-nowrap text-left">
+                          <button
+                            onClick={() => navigate(`/dashboard/game/${game.gameId}`)}
+                            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          >
+                            Join Review
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          { game.createdAt}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <Form method="post" encType="multipart/form-data">
               <input type="hidden" id="cards" name="cards" value={DEFAULT_VALUES.cards} />
-              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} />
+              <input type="hidden" id="questions" name="questions" value={DEFAULT_VALUES.questions} /> 
               <div className="mb-6">
                 <span className="block text-sm font-medium text-gray-700 mb-2">
                   Select Attachment
@@ -136,7 +185,7 @@ export default function ReviewPage() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-
+                            Review
                           </th>
                           <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                             Flashcards Count
@@ -190,7 +239,7 @@ export default function ReviewPage() {
                             {expandedAttachments.has(attachment.attachmentId) && (
                               <>
                                 <tr>
-                                  <td colSpan={4} className="px-6 py-4">
+                                  <td colSpan={5} className="px-6 py-4">
                                     <div className="border rounded-md overflow-x-auto">
                                       <table className="min-w-full divide-y divide-gray-200">
                                         <thead className="bg-gray-50">
@@ -220,7 +269,7 @@ export default function ReviewPage() {
                                   </td>
                                 </tr>
                                 <tr>
-                                  <td colSpan={4} className="px-6 py-4 text-center bg-gray-50">
+                                  <td colSpan={5} className="px-6 py-4 text-center bg-gray-50">
                                     <button
                                       type="submit"
                                       name="attachmentId"

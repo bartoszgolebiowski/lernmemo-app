@@ -50,16 +50,16 @@ CREATE TABLE `flashcard_attachment` (
 	`attachment_id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
 	`file_location` text NOT NULL,
-	`imported_at` text DEFAULT 'CURRENT_TIMESTAMP',
+	`imported_at` text,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
 CREATE TABLE `flashcard_game` (
 	`game_id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
-	`start_at` text DEFAULT 'CURRENT_TIMESTAMP',
+	`created_at` text,
 	`completed_at` text,
-	`attachment_id` text,
+	`attachment_id` text NOT NULL,
 	`cards` integer NOT NULL,
 	`questions` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `user`(`id`) ON UPDATE no action ON DELETE no action,

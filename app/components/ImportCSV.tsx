@@ -1,7 +1,8 @@
+import { Form } from '@remix-run/react';
 import { useState, useRef, DragEvent, ChangeEvent, FormEvent } from 'react';
 
 type Props = {
-    onSubmit: (language: string, file: File) => void;
+    onSubmit: (language: string, file: File, quickGame: boolean) => void;
 }
 
 const ImportCSV = (props: Props) => {
@@ -58,7 +59,7 @@ const ImportCSV = (props: Props) => {
         }
     };
 
-    const handleSubmit = (e: FormEvent) => {
+    const handleSubmit = (e: FormEvent<HTMLFormElement>, quickGame: boolean) => {
         e.preventDefault();
 
         if (!language) {
@@ -72,9 +73,10 @@ const ImportCSV = (props: Props) => {
         }
 
         if (onSubmit) {
-            onSubmit(language, file);
+            onSubmit(language, file, quickGame);
         }
     };
+
 
     const openFileDialog = () => {
         if (fileInputRef.current) {
@@ -87,7 +89,7 @@ const ImportCSV = (props: Props) => {
             <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Import CSV File</h2>
 
             {/* Using regular form instead of Form from remix since this is handled client-side */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <Form method="post" className="space-y-6">
                 {/* Language Selection */}
                 <div className="mb-4">
                     <label htmlFor="language" className="block text-sm font-medium text-gray-700 mb-1">
@@ -170,12 +172,27 @@ const ImportCSV = (props: Props) => {
                 {/* Submit Button */}
                 <button
                     type="submit"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, true);
+                    }}
                     className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors 
             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                 >
                     Import File
                 </button>
-            </form>
+                <button
+                    type="submit"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        if (file && language) handleSubmit(e as unknown as FormEvent<HTMLFormElement>, true);
+                    }}
+                    className="w-full bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 transition-colors 
+            focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                >
+                    Import File & Quick Flashcards
+                </button>
+            </Form>
         </div>
     );
 };

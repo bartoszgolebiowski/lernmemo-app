@@ -1,12 +1,13 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { useEffect, useReducer, useRef } from "react";
+import { useReducer } from "react";
 import { auth } from '~/lib/auth.server';
 import { db } from '~/db/index';
 import { createGameService } from "~/lib/services/gameService";
 import { gameActions, gameReducer, initialize } from "~/reducers/gameReducer";
 import { z } from "zod";
+import ReviewComplete from "~/components/ReviewComplete";
 
 export const meta: MetaFunction = () => {
   return [
@@ -36,9 +37,9 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     if (!game) {
       throw redirect("/dashboard/review");
     }
-    const [cards, answers] = await Promise.all([
+    const [cards, asnwers] = await Promise.all([
       gameService.getTranslationsByGameId(game.gameId),
-      gameService.getAnswersByGameId(game.gameId)
+      gameService.getAnswersByGameId(game.gameId),
     ]);
 
     if (!game) {
@@ -49,18 +50,21 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       game: {
         ...game,
         cards,
-        answers
-      }
+      },
+      initialSeed: Math.floor(Math.random() * 1000),
+      questionCount: asnwers.length,
+      score: asnwers.filter((a) => a.translationId === a.selectedTranslationId).length,
     });
   } catch (error) {
     throw redirect("/dashboard/review");
   }
 };
 
-const actionSchema = z.array(z.object({
+const completedSchema = z.boolean()
+const answersSchema = z.object({
   translationId: z.string().uuid(),
   selectedTranslationId: z.string().uuid(),
-}));
+})
 
 export async function action({ request, params }: ActionFunctionArgs) {
   const session = await auth.api.getSession({
@@ -74,94 +78,86 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const formData = await request.formData();
   const answersString = formData.get("answers") as string;
+  const completedString = formData.get("completed") as string;
   if (!answersString) return json({ error: "Answers are required" }, { status: 400 });
+  if (!completedString) return json({ error: "Completed is required" }, { status: 400 });
 
-  const answers = actionSchema.safeParse(JSON.parse(answersString));
+  const answers = answersSchema.safeParse(JSON.parse(answersString));
   if (!answers.success) {
     return json({ error: answers.error }, { status: 400 });
   }
 
+  const completed = completedSchema.safeParse(completedString === "true");
+  if (!completed.success) {
+    return json({ error: completed.error }, { status: 400 });
+  }
+
   const gameService = createGameService(db);
-  await gameService.submitAnswers(gameId, answers.data);
+  await gameService.submitAnswers(gameId, [answers.data]);
+
+  if (completed.data) {
+    await gameService.completeGame(gameId);
+  }
 
   return json({ success: true });
 }
 
 export default function GamePage() {
-  const { game } = useLoaderData<typeof loader>();
+  const { game, questionCount, score, initialSeed } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, game.questions));
+  const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, score, questionCount, initialSeed));
   const fetcher = useFetcher();
-  const answerQueueRef = useRef<Array<{
-    translationId: string;
-    selectedTranslationId: string;
-  }>>([]);
 
-  // Submit answers periodically
-  useEffect(() => {
-    const submitInterval = setInterval(() => {
-      const answerQueue = answerQueueRef.current;
+  const handleAnswerSelection = (translationId: string) => {
+    dispatch(gameActions.selectAnswer(translationId));
 
-      if (answerQueue.length > 0) {
-        fetcher.submit(
-          { answers: JSON.stringify(answerQueue) },
-          {
-            method: "post",
-          }
-        );
+    fetcher.submit(
+      {
+        completed: gameState.questionCount + 1 >= game.questions,
+        answers: JSON.stringify({
+          translationId: gameState.correctAnswer!,
+          selectedTranslationId: translationId // You need to get the actual translation ID here
+        }),
+      },
+      {
+        method: "post",
       }
-
-      answerQueueRef.current = [];
-    }, 10000);
-
-    return () => {
-      answerQueueRef.current = [];
-      clearInterval(submitInterval);
-    };
-  }, []);
-
-  const handleAnswerSelection = (translation: string) => {
-    dispatch(gameActions.selectAnswer(translation));
-
-    // Add answer to queue
-    if (gameState.currentTranslationId) {
-      answerQueueRef.current.push({
-        translationId: gameState.currentTranslationId!,
-        selectedTranslationId: gameState.currentTranslationId! // You need to get the actual translation ID here
-      });
-    }
+    );
 
     // Reset selections after delay
     setTimeout(() => {
-      dispatch(gameActions.resetSelection());
-      dispatch(gameActions.refreshCards(
+      dispatch(gameActions.nextQuestion(
         game.cards,
-        game.questions
+        game.questions,
+        Math.floor(Math.random() * 10000),
       ));
-      // Check if game is completed
-      if (gameState.questionCount + 1 >= game.questions) {
-        navigate("/dashboard/summary/" + game.gameId, { replace: true });
-      }
     }, 1000);
   };
 
-  const getAnswerButtonClassName = (translation: string) => {
+  const getAnswerButtonClassName = (translationId: string) => {
     const baseClasses = "p-4 rounded-md text-lg transition";
 
-    if (gameState.selectedTranslation === null) {
+
+    if (!gameState.selectedTranslationId) {
       return `${baseClasses} bg-gray-50 hover:bg-gray-100 text-gray-800`;
     }
 
-    if (translation === gameState.correctAnswer) {
+    if (gameState.correctAnswer === translationId) {
       return `${baseClasses} bg-green-600 text-white`;
     }
 
-    if (translation === gameState.selectedTranslation) {
+    if (gameState.selectedTranslationId === translationId) {
       return `${baseClasses} bg-red-600 text-white`;
     }
 
     return `${baseClasses} bg-gray-50 text-gray-800`;
   };
+
+  // Check if game is completed
+  if (gameState.questionCount >= game.questions) {
+    // Submit any remaining answers before redirecting
+    return <ReviewComplete gameId={game.gameId} score={gameState.score} totalQuestions={game.questions} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 py-6">
@@ -199,12 +195,12 @@ export default function GamePage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {gameState.possibleAnswers.map((translation) => (
                 <button
-                  key={translation}
-                  onClick={() => handleAnswerSelection(translation)}
-                  disabled={gameState.selectedTranslation !== null}
-                  className={getAnswerButtonClassName(translation)}
+                  key={translation.translationId}
+                  onClick={() => handleAnswerSelection(translation.translationId)}
+                  disabled={!!gameState.selectedTranslationId}
+                  className={getAnswerButtonClassName(translation.translationId)}
                 >
-                  {translation}
+                  {translation.translation}
                 </button>
               ))}
             </div>

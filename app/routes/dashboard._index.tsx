@@ -1,6 +1,9 @@
-import type { MetaFunction } from "@remix-run/node";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
+import { db } from "~/db/index";
+import { auth } from "~/lib/auth.server";
+import { createStatisticsService } from "~/lib/services/statisticsService";
 
 export const meta: MetaFunction = () => {
   return [
@@ -10,26 +13,27 @@ export const meta: MetaFunction = () => {
 
 // This is a placeholder for actual auth checking
 // You would replace this with your actual auth logic
-export const loader = async () => {
-  // This is where you would check if the user is authenticated
-  // For example, using a session cookie or JWT token
-  const isAuthenticated = true; // Replace with actual auth check
+export const loader = async ({ request }: LoaderFunctionArgs) => {
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
 
-  if (!isAuthenticated) {
-    return redirect("/login");
-  }
+  if (!session) return redirect("/login");
 
-  // Mock user data - replace with actual user data from your auth system
+  const userId = session.user.id;
+  const username = session.user.name;
+  const email = session.user.email;
+
+  // Get real user statistics using the statistics service
+  const statisticsService = createStatisticsService(db);
+  const stats = await statisticsService.getUserStats(userId);
+
   return json({
     user: {
-      name: "Example User",
-      email: "user@example.com",
+      name: username,
+      email: email,
     },
-    stats: {
-      cardsToReview: 12,
-      cardsLearned: 42,
-      streakDays: 5
-    }
+    stats
   });
 };
 
@@ -49,7 +53,7 @@ export default function Dashboard() {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
-                Cards to Review Today
+                Cards reviewed today
               </dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900">
                 {stats.cardsToReview}
@@ -68,7 +72,7 @@ export default function Dashboard() {
           <div className="bg-white overflow-hidden shadow rounded-lg">
             <div className="px-4 py-5 sm:p-6">
               <dt className="text-sm font-medium text-gray-500 truncate">
-                Cards Learned
+                Flaschards available
               </dt>
               <dd className="mt-1 text-3xl font-semibold text-gray-900">
                 {stats.cardsLearned}
@@ -77,7 +81,7 @@ export default function Dashboard() {
             <div className="bg-gray-50 px-4 py-4 sm:px-6">
               <div className="text-sm">
                 <a href="/dashboard/cards" className="font-medium text-blue-600 hover:text-blue-500">
-                  View All Cards <span aria-hidden="true">&rarr;</span>
+                  View Flaschards <span aria-hidden="true">&rarr;</span>
                 </a>
               </div>
             </div>
@@ -158,19 +162,6 @@ export default function Dashboard() {
               Supported formats include language learning vocabulary lists with term and definition columns.
             </p>
           </div>
-        </div>
-
-        <div className="mt-8 bg-white shadow overflow-hidden sm:rounded-md">
-          <div className="px-4 py-5 sm:px-6">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">
-              Recently Studied
-            </h3>
-          </div>
-          <ul className="divide-y divide-gray-200">
-            <li className="px-4 py-4 sm:px-6">
-              <p className="text-gray-700">No recent activity</p>
-            </li>
-          </ul>
         </div>
       </div>
     </main>
