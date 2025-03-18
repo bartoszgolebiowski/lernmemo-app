@@ -25,7 +25,6 @@ export class PresignedUrlCache {
    * @returns A presigned URL for accessing the file
    */
   async getFile(key: string): Promise<string> {
-    console.log(key)
     if (key.endsWith(".jpg") || key.endsWith(".png")) {
       return this.getImage(key);
     }

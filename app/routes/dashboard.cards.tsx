@@ -179,7 +179,7 @@ export default function ManageCardsPage() {
                               <AttachmentPreview
                                 fileUrl={attachment.presignedUrl}
                                 fileLocation={attachment.fileLocation}
-                                translations={attachment.translations as any}
+                                translations={attachment.translations}
                               />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

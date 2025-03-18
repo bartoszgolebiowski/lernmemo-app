@@ -17,10 +17,7 @@ export function CSVPreview({ csvUrl, fileName = "CSV file", translations }: CSVP
         className="flex items-center cursor-pointer"
         onClick={() => setIsModalOpen(true)}
       >
-        <div className="w-8 h-10 flex items-center justify-center bg-gray-100 rounded border border-gray-300">
-          <span className="text-xs font-bold text-gray-500">CSV</span>
-        </div>
-        <span className="ml-2 text-sm text-blue-500 hover:text-blue-700 hover:underline">View</span>
+        <span className="ml-2 text-sm text-blue-500 hover:text-blue-700 hover:underline">View CSV</span>
       </div>
 
       {/* Modal */}
