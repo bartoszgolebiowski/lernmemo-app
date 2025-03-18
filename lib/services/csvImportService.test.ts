@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import path from "path";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { DrizzleDatabase, createDatabase } from "~/db/index";
@@ -9,8 +9,9 @@ import {
 } from "~/db/schema/flashcard";
 import { CsvImportService } from "./csvImportService";
 import { eq } from "drizzle-orm";
-import { reset, seed } from "drizzle-seed";
+import { reset } from "drizzle-seed";
 import * as schema from "~/db/schema";
+import { v4 as uuidv4 } from "uuid";
 
 async function mockDatabaseAndMigration() {
   // Set up test database and apply migrations before tests
@@ -31,35 +32,15 @@ async function mockDatabaseAndMigration() {
   return db;
 }
 
-async function getUserId(db: DrizzleDatabase) {
-  return db
-    .select()
-    .from(schema.user)
-    .limit(1)
-    .then((users) => users[0].id);
-}
-
 describe("CsvImportService Integration Tests", () => {
   let db: DrizzleDatabase;
   let service: CsvImportService;
-  let userId = "";
+  const userId = uuidv4();
   const targetLanguage = "de";
 
   beforeAll(async () => {
     db = await mockDatabaseAndMigration();
     service = new CsvImportService(db);
-  });
-
-  beforeEach(async () => {
-    await seed(
-      db,
-      { user: schema.user },
-      {
-        count: 1,
-        seed: 42,
-      }
-    );
-    userId = await getUserId(db);
   });
 
   afterEach(async () => {

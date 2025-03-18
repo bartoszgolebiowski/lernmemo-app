@@ -6,8 +6,12 @@ import { zfd } from "zod-form-data";
 import { db } from "~/db/index";
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { ImportSection } from "~/components/dashboard/ImportSection";
+import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
 import React, { useState } from 'react';
 import { getAuth } from "@clerk/remix/ssr.server";
+import { createFileStorageService } from "~/lib/services/fileStorageService";
+import { env } from "~/lib/env";
+import { createPresignedUrlCache } from "~/lib/services/presignedUrlCache";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Manage Cards - Lernmemo App" }];
@@ -22,15 +26,29 @@ export const loader = async (args: LoaderFunctionArgs) => {
 
   // Get all attachments for the user
   const attachmentService = createAttachmentService(db);
+  const fileService = createFileStorageService(
+    {
+      endpoint: env.R2_ENDPOINT,
+      bucketName: env.R2_BUCKET_NAME,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY
+    }
+  );
+  const presignedUrlService = createPresignedUrlCache(fileService);
   const attachments = await attachmentService.getUserAttachments(userId);
+  const presignedUrls = await Promise.all(attachments.map(attachment =>
+    presignedUrlService.getFile(attachment.fileLocation)
+  ));
 
   return json({
-    attachments: attachments.map(attachment => ({
+    attachments: attachments.map((attachment, index) => ({
       id: attachment.attachmentId,
       wordCount: attachment.translationCount,
       targetLanguage: attachment.targetLanguage,
       createdAt: attachment.importedAt,
       isActive: !attachment.deactivatedAt,
+      presignedUrl: presignedUrls[index],
+      fileLocation: attachment.fileLocation,
       translations: attachment.translations.map(translation => ({
         word: translation.flashcard_translation?.word,
         translation: translation.flashcard_translation?.translation,
@@ -99,7 +117,7 @@ export default function ManageCardsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Manage Your Flashcards</h1>
           <p className="mt-1 text-sm text-gray-500">
             View and manage all your imported flashcard sets. You can see details of each set,
-            temporarily disable sets you don't need right now, or add new cards through our import options.
+            temporarily disable sets you do not need right now, or add new cards through our import options.
           </p>
 
         </div>
@@ -137,6 +155,9 @@ export default function ManageCardsPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Attachment
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Target Language
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -154,6 +175,13 @@ export default function ManageCardsPage() {
                       {attachments.map((attachment) => (
                         <React.Fragment key={attachment.id}>
                           <tr className={!attachment.isActive ? "bg-gray-100" : ""}>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <AttachmentPreview
+                                fileUrl={attachment.presignedUrl}
+                                fileLocation={attachment.fileLocation}
+                                translations={attachment.translations as any}
+                              />
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {attachment.targetLanguage}
                             </td>
@@ -197,7 +225,7 @@ export default function ManageCardsPage() {
                           </tr>
                           {expandedAttachments.has(attachment.id) && (
                             <tr>
-                              <td colSpan={4} className="px-6 py-4">
+                              <td colSpan={5} className="px-6 py-4">
                                 <div className="border rounded-md overflow-x-auto">
                                   <table className="min-w-full divide-y divide-gray-200">
                                     <thead className="bg-gray-50">

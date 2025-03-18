@@ -1,66 +1,139 @@
-import { promises as fs } from "fs";
-import path from "path";
-import os from "os";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { v4 as uuidv4 } from "uuid";
 
 export class FileStorageService {
-  private tempDir: string;
+  private s3Client: S3Client;
+  private bucketName: string;
 
-  constructor() {
-    // Use custom temp directory or default to OS temp directory with a subfolder
-    this.tempDir = path.join(os.tmpdir(), "lernmemo-app-temp");
+  constructor(config: {
+    accessKeyId: string;
+    secretAccessKey: string;
+    endpoint: string;
+    bucketName: string;
+  }) {
+    this.bucketName = config.bucketName;
+
+    this.s3Client = new S3Client({
+      region: "auto", // R2 uses "auto" region
+      endpoint: config.endpoint,
+      credentials: {
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      },
+      forcePathStyle: true, // R2 requires path-style requests.
+    });
   }
 
   /**
-   * Saves a File object to a temporary directory
+   * Saves a File object to R2 storage
    * @param file The file to save
-   * @param originalFilename Optional original filename to preserve
-   * @returns The path to the saved file
+   * @returns The key of the saved file in R2
    */
-  async saveToTemp(file: File): Promise<string> {
-    // Ensure temp directory exists
-    await this.ensureTempDirectoryExists();
+  async save(userId: string, file: File): Promise<string> {
+    // Generate a unique key for the file
+    const key = `${userId}/${uuidv4()}-${file.name}`;
 
-    // Generate a unique filename if one is not provided
-    const filename = `${uuidv4()}-${file.name}`;
-    const filePath = path.join(this.tempDir, filename);
-
-    // Convert File to Buffer and save it
+    // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    await fs.writeFile(filePath, buffer);
+    // Upload to R2
+    const command = new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: key,
+      Body: buffer,
+      ContentType: file.type,
+    });
 
-    return filePath;
-  }
+    await this.s3Client.send(command);
 
-  async toFile(content: string, filename: string): Promise<File> {
-    const buffer = Buffer.from(content);
-    return new File([buffer], filename);
-  }
-
-  async toString(file: File): Promise<string> {
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    return buffer.toString();
+    return key; // Return the key instead of file path
   }
 
   /**
-   * Ensures the temporary directory exists, creating it if necessary
+   * Saves an image file to R2 storage
+   * @param userId The user ID
+   * @param file The image file to save
+   * @returns The key of the saved file in R2
    */
-  private async ensureTempDirectoryExists(): Promise<void> {
-    try {
-      await fs.access(this.tempDir);
-    } catch (error) {
-      // Directory doesn't exist, create it
-      await fs.mkdir(this.tempDir, { recursive: true });
+  async saveImage(userId: string, file: File): Promise<string> {
+    // Validate file is an image
+    if (!file.type.startsWith('image/')) {
+      throw new Error('File is not an image');
     }
+    
+    return this.save(userId, file);
+  }
+
+  /**
+   * Saves a CSV file to R2 storage
+   * @param userId The user ID
+   * @param file The CSV file to save
+   * @returns The key of the saved file in R2
+   */
+  async saveCSV(userId: string, file: File): Promise<string> {
+    // Validate file is a CSV
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+      throw new Error('File is not a CSV');
+    }
+    
+    return this.save(userId, file);
+  }
+
+  /**
+   * Gets a presigned URL for an image file
+   * @param userId The user ID
+   * @param key The key of the image in R2
+   * @returns A presigned URL for accessing the image
+   */
+  async getImage(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key
+    });
+
+    // Generate a presigned URL that expires in 1 hour
+    const presignedUrl = await getSignedUrl(this.s3Client, command, { 
+      expiresIn: 3600 
+    });
+
+    return presignedUrl;
+  }
+
+  /**
+   * Gets a presigned URL for a CSV file
+   * @param userId The user ID
+   * @param key The key of the CSV in R2
+   * @returns A presigned URL for accessing the CSV
+   */
+  async getCSV(key: string): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucketName,
+      Key: key
+    });
+
+    // Generate a presigned URL that expires in 1 hour
+    const presignedUrl = await getSignedUrl(this.s3Client, command, { 
+      expiresIn: 3600 
+    });
+
+    return presignedUrl;
   }
 }
 
 /**
  * Creates and returns a new FileStorageService instance
  */
-export function createFileStorageService(): FileStorageService {
-  return new FileStorageService();
+export function createFileStorageService(config: {
+  accessKeyId: string;
+  secretAccessKey: string;
+  endpoint: string;
+  bucketName: string;
+}): FileStorageService {
+  return new FileStorageService(config);
 }

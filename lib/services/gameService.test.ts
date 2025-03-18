@@ -12,7 +12,7 @@ import {
 } from "~/db/schema/flashcard";
 import { GameService } from "./gameService";
 import { eq } from "drizzle-orm";
-import { reset, seed } from "drizzle-seed";
+import { reset } from "drizzle-seed";
 import * as schema from "~/db/schema";
 import { v4 as uuidv4 } from "uuid";
 
@@ -32,14 +32,6 @@ async function mockDatabaseAndMigration() {
   }
 
   return db;
-}
-
-async function getUserId(db: DrizzleDatabase) {
-  return db
-    .select()
-    .from(schema.user)
-    .limit(1)
-    .then((users) => users[0].id);
 }
 
 async function setupTestTranslations(db: DrizzleDatabase, userId: string) {
@@ -101,9 +93,9 @@ async function setupTestTranslations(db: DrizzleDatabase, userId: string) {
 }
 
 describe("GameService Integration Tests", () => {
+  const userId = uuidv4();
   let db: DrizzleDatabase;
   let gameService: GameService;
-  let userId: string;
   let attachmentId: string;
 
   beforeAll(async () => {
@@ -112,15 +104,6 @@ describe("GameService Integration Tests", () => {
   });
 
   beforeEach(async () => {
-    await seed(
-      db,
-      { user: schema.user },
-      {
-        count: 1,
-        seed: 42,
-      }
-    );
-    userId = await getUserId(db);
     attachmentId = await setupTestTranslations(db, userId);
   });
 
@@ -198,21 +181,19 @@ describe("GameService Integration Tests", () => {
       const selectedTranslationId = gameTranslation[0].translationId;
 
       // Act
-      const result = await gameService.submitAnswer(
-        gameId,
-        translationId,
-        selectedTranslationId
-      );
+      const result = await gameService.submitAnswers(gameId, [
+        { translationId, selectedTranslationId },
+      ]);
 
       // Assert
       expect(result).toBeDefined();
-      expect(result.answerId).toBeDefined();
+      expect(result[0].answerId).toBeDefined();
 
       // Verify answer was recorded
       const answers = await db
         .select()
         .from(flashcardGameAnswer)
-        .where(eq(flashcardGameAnswer.answerId, result.answerId));
+        .where(eq(flashcardGameAnswer.answerId, result[0].answerId));
       expect(answers.length).toBe(1);
       expect(answers[0].gameId).toBe(gameId);
       expect(answers[0].translationId).toBe(translationId);
@@ -244,7 +225,7 @@ describe("GameService Integration Tests", () => {
         .select()
         .from(flashcardGame)
         .where(eq(flashcardGame.gameId, gameId));
-      
+
       expect(games.length).toBe(1);
       expect(games[0].completedAt).toBeDefined();
     });
@@ -254,9 +235,9 @@ describe("GameService Integration Tests", () => {
       const nonExistentGameId = uuidv4();
 
       // Act & Assert
-      await expect(
-        gameService.completeGame(nonExistentGameId)
-      ).rejects.toThrow("Game not found or could not be completed");
+      await expect(gameService.completeGame(nonExistentGameId)).rejects.toThrow(
+        "Game not found or could not be completed"
+      );
     });
   });
 });

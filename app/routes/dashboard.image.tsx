@@ -10,6 +10,8 @@ import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
 import { createGameService } from '~/lib/services/gameService';
 import { getAuth } from '@clerk/remix/ssr.server';
+import { env } from '~/lib/env';
+import { createLocalFileStorageService } from '~/lib/services/localFileService';
 
 export const meta: MetaFunction = () => {
   return [
@@ -47,7 +49,15 @@ export const action = async (args: ActionFunctionArgs) => {
   }
 
   const aiService = createGeminiService();
-  const fileServie = createFileStorageService();
+  const localFileService = createLocalFileStorageService()
+  const fileService = createFileStorageService(
+    {
+      endpoint: env.R2_ENDPOINT,
+      bucketName: env.R2_BUCKET_NAME,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY
+    }
+  );
   const csvService = createCsvImportService(db)
 
   const validation = actionSchema.safeParse(await args.request.formData());
@@ -55,10 +65,13 @@ export const action = async (args: ActionFunctionArgs) => {
 
   const { language, file, quickGame } = validation.data;
 
-  const tmpFilePath = await fileServie.saveToTemp(file);
-  const text = await aiService.imageToText(tmpFilePath, language)
+  const [tmpFilePath, localFilePath] = await Promise.all([
+    fileService.saveImage(userId, file),
+    localFileService.saveToTemp(file),
+  ]);
+  const text = await aiService.imageToText(localFilePath, language)
   const csvText = await aiService.textToCsvFormat(text)
-  const resultImprot = await csvService.importTranslationsFromCsv(csvText, file.name, userId, language);
+  const resultImprot = await csvService.importTranslationsFromCsv(csvText, tmpFilePath, userId, language);
 
   if (quickGame === "true") {
     // Use GameService to create a new game

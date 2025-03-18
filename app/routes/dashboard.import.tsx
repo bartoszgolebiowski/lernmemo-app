@@ -10,6 +10,8 @@ import { createFileStorageService } from '~/lib/services/fileStorageService';
 import { zfd } from 'zod-form-data';
 import { createGameService } from '~/lib/services/gameService';
 import { getAuth } from '@clerk/remix/ssr.server';
+import { createLocalFileStorageService } from '~/lib/services/localFileService';
+import { env } from '~/lib/env';
 
 export const meta: MetaFunction = () => {
   return [
@@ -47,14 +49,23 @@ export const action = async (args: ActionFunctionArgs) => {
   }
 
   const csvService = createCsvImportService(db)
-  const fileService = createFileStorageService();
+  const localFileService = createLocalFileStorageService()
+  const fileService = createFileStorageService(
+    {
+      endpoint: env.R2_ENDPOINT,
+      bucketName: env.R2_BUCKET_NAME,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY
+    }
+  );
 
   const validation = actionSchema.safeParse(await args.request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
 
   const { language, file, quickGame } = validation.data;
-  const csvFile = await fileService.toString(file);
-  const resultImprot = await csvService.importTranslationsFromCsv(csvFile, file.name, userId, language);
+  const tmpFilePath = await fileService.saveCSV(userId, file);
+  const csvFile = await localFileService.toString(file);
+  const resultImprot = await csvService.importTranslationsFromCsv(csvFile, tmpFilePath, userId, language);
 
   if (quickGame === "true") {
     // Use GameService to create a new game

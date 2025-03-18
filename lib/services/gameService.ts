@@ -241,7 +241,7 @@ export class GameService {
             .returning()
         );
 
-        await Promise.all(answerInserts);
+        return (await Promise.all(answerInserts)).flatMap((result) => result);
       });
     } catch (e) {
       console.error("Error submitting answers:", e);
