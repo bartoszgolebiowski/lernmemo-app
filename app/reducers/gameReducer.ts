@@ -24,7 +24,16 @@ type GameAction =
       type: "NEXT_QUESTION";
       payload: { cards: Card[]; maxQuestions: number; seed: number };
     }
-  | { type: "SELECT_ANSWER"; payload: { translationId: string } };
+  | { type: "SELECT_ANSWER"; payload: { translationId: string } }
+  | {
+      type: "INITIALIZE";
+      payload: {
+        cards: Card[];
+        score: number;
+        questionCount: number;
+        seed: number;
+      };
+    };
 
 const initialState: GameState = {
   currentQuestion: null,
@@ -108,6 +117,10 @@ export const initialize = (
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
+    case "INITIALIZE": {
+      const { cards, score, questionCount, seed } = action.payload;
+      return initialize(cards, score, questionCount, seed);
+    }
     case "NEXT_QUESTION": {
       const { cards, maxQuestions, seed } = action.payload;
 
@@ -118,6 +131,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             .includes(card.translationId!)
       );
 
+      console.log("availableCards", availableCards);
       if (availableCards.length === 0) {
         availableCards = cards;
       }
@@ -197,5 +211,14 @@ export const gameActions = {
   selectAnswer: (translationId: string): GameAction => ({
     type: "SELECT_ANSWER",
     payload: { translationId },
+  }),
+  initialize: (
+    cards: Card[],
+    score: number,
+    questionCount: number,
+    seed: number
+  ): GameAction => ({
+    type: "INITIALIZE",
+    payload: { cards, score, questionCount, seed },
   }),
 };

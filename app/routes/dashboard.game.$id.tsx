@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
-import { useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import { db } from '~/db/index';
 import { createGameService } from "~/lib/services/gameService";
 import { gameActions, gameReducer, initialize } from "~/reducers/gameReducer";
@@ -95,6 +95,7 @@ export async function action(args: ActionFunctionArgs) {
 
   if (completed.data) {
     await gameService.completeGame(gameId);
+    return redirect(`/dashboard/game/${gameId}`);
   }
 
   return json({ success: true });
@@ -104,8 +105,13 @@ export default function GamePage() {
   const { game, questionCount, score, initialSeed } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, score, questionCount, initialSeed));
+  const [fastMode, setFastMode] = useState(false);
   const fetcher = useFetcher();
 
+  useEffect(() => {
+    dispatch(gameActions.initialize(game.cards, score, questionCount, initialSeed));
+  }, [game.gameId]);
+  
   const handleAnswerSelection = (translationId: string) => {
     dispatch(gameActions.selectAnswer(translationId));
 
@@ -114,7 +120,7 @@ export default function GamePage() {
         completed: gameState.questionCount + 1 >= game.questions,
         answers: JSON.stringify({
           translationId: gameState.correctAnswer!,
-          selectedTranslationId: translationId // You need to get the actual translation ID here
+          selectedTranslationId: translationId
         }),
       },
       {
@@ -122,14 +128,14 @@ export default function GamePage() {
       }
     );
 
-    // Reset selections after delay
+    // Reset selections after delay based on fast mode
     setTimeout(() => {
       dispatch(gameActions.nextQuestion(
         game.cards,
         game.questions,
         Math.floor(Math.random() * 10000),
       ));
-    }, 1000);
+    }, fastMode ? 100 : 1000);
   };
 
   const getAnswerButtonClassName = (translationId: string) => {
@@ -176,9 +182,22 @@ export default function GamePage() {
               ← Back to Dashboard
             </button>
 
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Questions: {gameState.questionCount} / {game.questions}</p>
-              <p className="text-sm font-semibold">Score: {gameState.score}</p>
+            <div className="flex items-center gap-6">
+              <label className="flex items-center gap-2 bg-white px-3 py-2 rounded-md shadow-sm">
+                <input
+                  type="checkbox"
+                  id="fastMode"
+                  checked={fastMode}
+                  onChange={(e) => setFastMode(e.target.checked)}
+                  className="h-4 w-4 text-indigo-600 rounded"
+                />
+                <span className="text-sm text-gray-600">Fast Mode</span>
+              </label>
+
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Questions: {gameState.questionCount} / {game.questions}</p>
+                <p className="text-sm font-semibold">Score: {gameState.score}</p>
+              </div>
             </div>
           </div>
 
