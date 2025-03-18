@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import path from "path";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { DrizzleDatabase, createDatabase } from "~/db/index";
+import { DrizzleDatabase, createDatabaseSQLite } from "~/db/index";
 import {
   flashcardAttachment,
   flashcardImport,
@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from "uuid";
 
 async function mockDatabaseAndMigration() {
   // Set up test database and apply migrations before tests
-  const db = createDatabase(`file::memory:?cache=shared`);
+  const db = createDatabaseSQLite(`file::memory:?cache=shared`);
 
   // Apply migrations to set up schema
   try {

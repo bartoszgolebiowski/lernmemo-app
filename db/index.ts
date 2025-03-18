@@ -1,6 +1,23 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { env } from "~/lib/env";
 
-export const createDatabase = (url: string) => drizzle({ connection: { url } });
-export const db = createDatabase(env.DB_FILE_NAME);
+const createDatabaseTurso = (
+  url: string = env.TURSO_CONNECTION_URL,
+  authToken: string
+) =>
+  drizzle({
+    connection: {
+      url,
+      authToken,
+    },
+  });
+
+export const createDatabaseSQLite = (url: string) =>
+  drizzle({ connection: { url } });
+
+export const db = createDatabaseTurso(
+  env.TURSO_CONNECTION_URL,
+  env.TURSO_AUTH_TOKEN
+);
+
 export type DrizzleDatabase = typeof db;

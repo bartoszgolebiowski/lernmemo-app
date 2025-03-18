@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ee91d3fc-925b-441a-8594-bcea94f6c169",
+  "id": "322e8ae1-83e7-47dd-b95e-ff2c9883a06a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "flashcard_attachment": {
