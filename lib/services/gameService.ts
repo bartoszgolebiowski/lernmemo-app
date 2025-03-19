@@ -139,8 +139,10 @@ export class GameService {
         return { gameId };
       });
     } catch (e) {
-      console.error(e);
-      throw new Error("Failed to create game");
+      if (e instanceof Error) {
+        throw new Error("Failed to create game", { cause: e });
+      }
+      throw e
     }
   }
 
