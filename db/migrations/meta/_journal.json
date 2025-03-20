@@ -15,6 +15,13 @@
       "when": 1742366196100,
       "tag": "0001_parallel_la_nuit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1742451167830,
+      "tag": "0002_flashy_lester",
+      "breakpoints": true
     }
   ]
 }

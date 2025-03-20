@@ -40,7 +40,7 @@ export const loader = async (args: LoaderFunctionArgs) => {
     presignedUrlService.getFile(attachment.fileLocation)
   ));
 
-  return json({
+  return {
     attachments: attachments.map((attachment, index) => ({
       id: attachment.attachmentId,
       wordCount: attachment.translationCount,
@@ -54,7 +54,7 @@ export const loader = async (args: LoaderFunctionArgs) => {
         translation: translation.flashcard_translation?.translation,
       }))
     }))
-  });
+  };
 };
 
 const toggleActionSchema = zfd.formData({

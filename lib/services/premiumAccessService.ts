@@ -18,6 +18,7 @@ const USAGE_THRESHOLDS = {
 
 export class PremiumAccessService {
   constructor(private db: DrizzleDatabase) {}
+
   /**
    * Track a user action
    * @param userId The user's ID
@@ -34,7 +35,7 @@ export class PremiumAccessService {
    * Check if a user can perform an action based on their account type
    * @param userId The user's ID
    * @param action The action to check
-   * @param isPremium Whether the user has a premium account
+   * @param isPremium Whether the user has a premium account (optional)
    * @returns boolean indicating if the action is allowed
    */
   async canPerformAction(
@@ -71,7 +72,7 @@ export class PremiumAccessService {
    * Perform an action if the user has not exceeded their limit
    * @param userId The user's ID
    * @param action The action to perform
-   * @param isPremium Whether the user has a premium account
+   * @param isPremium Whether the user has a premium account (optional)
    * @returns boolean indicating if the action was performed
    */
   async performAction(
@@ -92,7 +93,7 @@ export class PremiumAccessService {
   /**
    * Get the remaining actions for a user
    * @param userId The user's ID
-   * @param isPremium Whether the user has a premium account
+   * @param isPremium Whether the user has a premium account (optional)
    * @returns Object containing the remaining actions for each action type
    */
   async getRemainingActions(
