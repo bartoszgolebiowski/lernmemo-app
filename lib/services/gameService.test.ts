@@ -9,6 +9,7 @@ import {
   flashcardGameTranslation,
   flashcardImport,
   flashcardTranslation,
+  flashcardGameAttachment,
 } from "~/db/schema/flashcard";
 import { GameService } from "./gameService";
 import { eq } from "drizzle-orm";
@@ -38,16 +39,20 @@ async function setupTestTranslations(db: DrizzleDatabase, userId: string) {
   // Create a test attachment
   const attachments = await db
     .insert(flashcardAttachment)
-    .values({
-      userId,
-      fileLocation: "test-attachment.csv",
-    })
+    .values([
+      {
+        userId,
+        fileLocation: "test-attachment-de.csv",
+      },
+      {
+        userId,
+        fileLocation: "test-attachment-es.csv",
+      },
+    ])
     .returning();
 
-  const attachment = attachments[0];
-
   // Create some test translations
-  const translations = [
+  const translations1 = [
     { word: "apple", translation: "Apfel" },
     { word: "house", translation: "Haus" },
     { word: "car", translation: "Auto" },
@@ -69,9 +74,31 @@ async function setupTestTranslations(db: DrizzleDatabase, userId: string) {
     { word: "mountain", translation: "Berg" },
     { word: "lake", translation: "See" },
   ];
+  const translations2 = [
+    { word: "apple", translation: "manzana" },
+    { word: "house", translation: "casa" },
+    { word: "car", translation: "coche" },
+    { word: "book", translation: "libro" },
+    { word: "dog", translation: "perro" },
+    { word: "cat", translation: "gato" },
+    { word: "tree", translation: "árbol" },
+    { word: "flower", translation: "flor" },
+    { word: "sun", translation: "sol" },
+    { word: "moon", translation: "luna" },
+    { word: "water", translation: "agua" },
+    { word: "fire", translation: "fuego" },
+    { word: "earth", translation: "tierra" },
+    { word: "wind", translation: "viento" },
+    { word: "cloud", translation: "nube" },
+    { word: "rain", translation: "lluvia" },
+    { word: "snow", translation: "nieve" },
+    { word: "ice", translation: "hielo" },
+    { word: "mountain", translation: "montaña" },
+    { word: "lake", translation: "lago" },
+  ];
 
   // Insert translations and link to attachment
-  for (const item of translations) {
+  for (const item of translations1) {
     const translations = await db
       .insert(flashcardTranslation)
       .values({
@@ -84,19 +111,38 @@ async function setupTestTranslations(db: DrizzleDatabase, userId: string) {
     const translation = translations[0];
 
     await db.insert(flashcardImport).values({
-      attachmentId: attachment.attachmentId,
+      attachmentId: attachments[0].attachmentId,
       translationId: translation.translationId,
     });
   }
 
-  return attachment.attachmentId;
+  // Insert translations and link to attachment
+  for (const item of translations2) {
+    const translations = await db
+      .insert(flashcardTranslation)
+      .values({
+        word: item.word,
+        translation: item.translation,
+        targetLanguage: "es",
+      })
+      .returning();
+
+    const translation = translations[0];
+
+    await db.insert(flashcardImport).values({
+      attachmentId: attachments[1].attachmentId,
+      translationId: translation.translationId,
+    });
+  }
+
+  return attachments.map((a) => a.attachmentId);
 }
 
 describe("GameService Integration Tests", () => {
   const userId = uuidv4();
   let db: DrizzleDatabase;
   let gameService: GameService;
-  let attachmentId: string;
+  let attachments: string[];
 
   beforeAll(async () => {
     db = await mockDatabaseAndMigration();
@@ -104,7 +150,7 @@ describe("GameService Integration Tests", () => {
   });
 
   beforeEach(async () => {
-    attachmentId = await setupTestTranslations(db, userId);
+    attachments = await setupTestTranslations(db, userId);
   });
 
   afterEach(async () => {
@@ -115,14 +161,13 @@ describe("GameService Integration Tests", () => {
     it("should create a game with specified number of flashcards", async () => {
       // Arrange
       const flashcardCount = 3;
-      const questionCount = 10;
+      const attachmentId = attachments[0];
 
       // Act
       const result = await gameService.createGame(
-        attachmentId,
+        [attachmentId], // Pass as array
         userId,
-        flashcardCount,
-        questionCount
+        flashcardCount
       );
 
       // Assert
@@ -136,9 +181,52 @@ describe("GameService Integration Tests", () => {
         .where(eq(flashcardGame.gameId, result.gameId));
       expect(games.length).toBe(1);
       expect(games[0].userId).toBe(userId);
-      expect(games[0].attachmentId).toBe(attachmentId);
       expect(games[0].flashcards).toBe(flashcardCount);
-      expect(games[0].questions).toBe(questionCount);
+
+      // Verify game-attachment link was created
+      const gameAttachments = await db
+        .select()
+        .from(flashcardGameAttachment)
+        .where(eq(flashcardGameAttachment.gameId, result.gameId));
+      expect(gameAttachments.length).toBe(1);
+      expect(gameAttachments[0].attachmentId).toBe(attachmentId);
+
+      // Verify game translations were created
+      const gameTranslations = await db
+        .select()
+        .from(flashcardGameTranslation)
+        .where(eq(flashcardGameTranslation.gameId, result.gameId));
+      expect(gameTranslations.length).toBe(flashcardCount);
+    });
+
+    it("should create a game with flashcards from multiple attachments", async () => {
+      // Arrange
+      const flashcardCount = 5;
+
+      // Act
+      const result = await gameService.createGame(
+        attachments,
+        userId,
+        flashcardCount
+      );
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.gameId).toBeDefined();
+
+      // Verify game record was created
+      const games = await db
+        .select()
+        .from(flashcardGame)
+        .where(eq(flashcardGame.gameId, result.gameId));
+      expect(games.length).toBe(1);
+
+      // Verify game-attachment links were created for all attachments
+      const gameAttachments = await db
+        .select()
+        .from(flashcardGameAttachment)
+        .where(eq(flashcardGameAttachment.gameId, result.gameId));
+      expect(gameAttachments.length).toBe(attachments.length);
 
       // Verify game translations were created
       const gameTranslations = await db
@@ -154,8 +242,15 @@ describe("GameService Integration Tests", () => {
 
       // Act & Assert
       await expect(
-        gameService.createGame(nonExistentAttachmentId, userId, 3, 10)
+        gameService.createGame([nonExistentAttachmentId], userId, 3)
       ).rejects.toThrow("Failed to create game");
+    });
+
+    it("should throw an error when no attachments are provided", async () => {
+      // Act & Assert
+      await expect(gameService.createGame([], userId, 3)).rejects.toThrow(
+        "At least one attachment ID is required"
+      );
     });
   });
 
@@ -163,10 +258,9 @@ describe("GameService Integration Tests", () => {
     it("should record a submitted answer", async () => {
       // Arrange - First create a game
       const { gameId } = await gameService.createGame(
-        attachmentId,
+        [attachments[0]], // Pass as array
         userId,
-        3,
-        10
+        3
       );
 
       // Get a translation ID from the game
@@ -178,7 +272,7 @@ describe("GameService Integration Tests", () => {
       expect(gameTranslation.length).toBe(1);
 
       const translationId = gameTranslation[0].translationId;
-      const selectedTranslationId = gameTranslation[0].translationId;
+      const selectedTranslationId = translationId;
 
       // Act
       const result = await gameService.submitAnswers(gameId, [
@@ -205,10 +299,9 @@ describe("GameService Integration Tests", () => {
     it("should mark a game as completed", async () => {
       // Arrange - First create a game
       const { gameId } = await gameService.createGame(
-        attachmentId,
+        [attachments[0]], // Pass as array
         userId,
-        3,
-        10
+        3
       );
 
       // Act
@@ -225,7 +318,6 @@ describe("GameService Integration Tests", () => {
         .select()
         .from(flashcardGame)
         .where(eq(flashcardGame.gameId, gameId));
-
       expect(games.length).toBe(1);
       expect(games[0].completedAt).toBeDefined();
     });

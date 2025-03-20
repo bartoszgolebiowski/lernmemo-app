@@ -1,14 +1,17 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { DrizzleDatabase } from "~/db/index";
 import {
   flashcardGame,
   flashcardGameAnswer,
+  flashcardGameAttachment,
   flashcardGameTranslation,
   flashcardImport,
   flashcardTranslation,
 } from "~/db/schema/flashcard";
 
 export class GameService {
+  private static ALL_FLASHCARDS = 2137;
+
   constructor(private db: DrizzleDatabase) {}
 
   async getUncompletedGames(userId: string) {
@@ -83,22 +86,26 @@ export class GameService {
   }
 
   async createGame(
-    attachmentId: string,
+    attachmentIds: string[],
     userId: string,
-    flashcards: number,
-    questions: number
+    flashcards: number
   ) {
+    if (attachmentIds.length === 0) {
+      throw new Error("At least one attachment ID is required");
+    }
     try {
       return await this.db.transaction(async (tx) => {
-        // Generate a new gameId and insert the game record.
+        // Generate a new gameId and insert the game record without attachment reference
+
+        if (flashcards === GameService.ALL_FLASHCARDS) {
+          flashcards = await this.getAttachmentsFlaschardCound(attachmentIds);
+        }
+        
         const games = await tx
           .insert(flashcardGame)
           .values({
             userId,
-            attachmentId,
             flashcards,
-            questions,
-            // startAt will use the default CURRENT_TIMESTAMP from the schema
           })
           .returning();
 
@@ -108,11 +115,24 @@ export class GameService {
 
         const gameId = games[0].gameId;
 
-        // Retrieve all translationIds from flashcardImport for the given attachment.
+        // Insert game-attachment relationships for all attachments
+        const attachmentInserts = attachmentIds.map((attachmentId) =>
+          tx
+            .insert(flashcardGameAttachment)
+            .values({
+              gameId,
+              attachmentId,
+            })
+            .execute()
+        );
+
+        await Promise.all(attachmentInserts);
+
+        // Retrieve all translationIds from flashcardImport for all the given attachments.
         const importedTranslations = await tx
           .select({ translationId: flashcardImport.translationId })
           .from(flashcardImport)
-          .where(eq(flashcardImport.attachmentId, attachmentId));
+          .where(inArray(flashcardImport.attachmentId, attachmentIds));
 
         // Choose the first N translationIds where N = flashcards argument.
         const selectedTranslations = importedTranslations.slice(0, flashcards);
@@ -142,16 +162,11 @@ export class GameService {
       if (e instanceof Error) {
         throw new Error("Failed to create game", { cause: e });
       }
-      throw e
+      throw e;
     }
   }
 
-  /**
-   * Creates a new game identical to an existing game
-   * @param gameId ID of the existing game to duplicate
-   * @param userId User ID
-   * @returns Object containing the new gameId
-   */
+  // Update recreateGame method to handle multiple attachments
   async recreateGame(gameId: string, userId: string) {
     try {
       return await this.db.transaction(async (tx) => {
@@ -172,14 +187,18 @@ export class GameService {
 
         const originalGame = originalGames[0];
 
-        // Create a new game with the same attachment
+        // Get all attachments from the original game
+        const originalAttachments = await tx
+          .select()
+          .from(flashcardGameAttachment)
+          .where(eq(flashcardGameAttachment.gameId, gameId));
+
+        // Create a new game
         const newGames = await tx
           .insert(flashcardGame)
           .values({
             userId,
-            attachmentId: originalGame.attachmentId,
             flashcards: originalGame.flashcards,
-            questions: originalGame.questions,
           })
           .returning();
 
@@ -188,6 +207,19 @@ export class GameService {
         }
 
         const newGameId = newGames[0].gameId;
+
+        // Add all attachments to the new game
+        const attachmentInserts = originalAttachments.map((attachment) =>
+          tx
+            .insert(flashcardGameAttachment)
+            .values({
+              gameId: newGameId,
+              attachmentId: attachment.attachmentId,
+            })
+            .execute()
+        );
+
+        await Promise.all(attachmentInserts);
 
         // Get all translations from the original game
         const originalTranslations = await tx
@@ -275,6 +307,31 @@ export class GameService {
       }
       throw new Error("Failed to complete game", { cause: e });
     }
+  }
+
+  // New method to count total words (i.e. translation count) for given attachment IDs
+  private async getAttachmentsFlaschardCound(
+    attachmentIds: string[]
+  ): Promise<number> {
+    const translationsArrays = await Promise.all(
+      attachmentIds.map((id) => this.getTranslationsFromAttachment(id))
+    );
+    const totalWords = translationsArrays.reduce(
+      (sum, translations) => sum + translations.length,
+      0
+    );
+    return totalWords;
+  }
+
+  private async getTranslationsFromAttachment(attachmentId: string) {
+    return this.db
+      .select()
+      .from(flashcardImport)
+      .leftJoin(
+        flashcardTranslation,
+        eq(flashcardImport.translationId, flashcardTranslation.translationId)
+      )
+      .where(eq(flashcardImport.attachmentId, attachmentId));
   }
 }
 

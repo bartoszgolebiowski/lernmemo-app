@@ -292,7 +292,7 @@ describe("SubscriptionService Integration Tests", () => {
 
       // Assert
       expect(history.length).toBe(3);
-      console.log(history);
+
       // Events should be in reverse chronological order (newest first)
       expect(history[0].eventType).toBe(
         subscriptionEventTypes.SUBSCRIPTION_CANCELED

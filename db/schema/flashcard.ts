@@ -49,14 +49,22 @@ export const flashcardGame = sqliteTable("flashcard_game", {
     .notNull(),
   createdAt: text("created_at").$default(() => new Date().toISOString()),
   completedAt: text("completed_at"),
-  attachmentId: text("attachment_id")
-    .notNull()
-    .references(() => flashcardAttachment.attachmentId),
   flashcards: integer("cards").notNull(),
-  questions: integer("questions").notNull(),
 });
 
-// New table: Collect all translations for specific game with a composite primary key.
+export const flashcardGameAttachment = sqliteTable(
+  "flashcard_game_attachment",
+  {
+    gameId: text("game_id")
+      .notNull()
+      .references(() => flashcardGame.gameId),
+    attachmentId: text("attachment_id")
+      .notNull()
+      .references(() => flashcardAttachment.attachmentId),
+  },
+  (table) => [primaryKey({ columns: [table.gameId, table.attachmentId] })]
+);
+
 export const flashcardGameTranslation = sqliteTable(
   "flashcard_game_translation",
   {
@@ -70,7 +78,6 @@ export const flashcardGameTranslation = sqliteTable(
   (table) => [primaryKey({ columns: [table.gameId, table.translationId] })]
 );
 
-// New table: Collect answers for specific game for specific translation.
 export const flashcardGameAnswer = sqliteTable("flashcard_game_answer", {
   answerId: text("answer_id")
     .primaryKey()

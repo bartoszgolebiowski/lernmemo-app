@@ -51,7 +51,7 @@ export const loader = async (args: LoaderFunctionArgs) => {
       },
       initialSeed: Math.floor(Math.random() * 1000),
       questionCount: asnwers.length,
-      score: asnwers.filter((a) => a.translationId === a.selectedTranslationId).length,
+      completedFlaschcards: asnwers.filter((a) => a.translationId === a.selectedTranslationId).length,
     });
   } catch (error) {
     throw redirect("/dashboard/review");
@@ -102,22 +102,27 @@ export async function action(args: ActionFunctionArgs) {
 }
 
 export default function GamePage() {
-  const { game, questionCount, score, initialSeed } = useLoaderData<typeof loader>();
+  const { game, questionCount, completedFlaschcards, initialSeed } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, score, questionCount, initialSeed));
+  const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, completedFlaschcards, questionCount, initialSeed));
   const [fastMode, setFastMode] = useState(false);
   const fetcher = useFetcher();
 
   useEffect(() => {
-    dispatch(gameActions.initialize(game.cards, score, questionCount, initialSeed));
+    dispatch(gameActions.initialize(game.cards, completedFlaschcards, questionCount, initialSeed));
   }, [game.gameId]);
-  
+
   const handleAnswerSelection = (translationId: string) => {
     dispatch(gameActions.selectAnswer(translationId));
 
+    // Check if this answer will complete all words
+    const isCorrectAnswer = translationId === gameState.correctAnswer;
+    const willCompleteAllWords = isCorrectAnswer &&
+      gameState.completedWords.length + 1 === game.cards.length;
+
     fetcher.submit(
       {
-        completed: gameState.questionCount + 1 >= game.questions,
+        completed: willCompleteAllWords,
         answers: JSON.stringify({
           translationId: gameState.correctAnswer!,
           selectedTranslationId: translationId
@@ -132,7 +137,6 @@ export default function GamePage() {
     setTimeout(() => {
       dispatch(gameActions.nextQuestion(
         game.cards,
-        game.questions,
         Math.floor(Math.random() * 10000),
       ));
     }, fastMode ? 100 : 1000);
@@ -158,9 +162,12 @@ export default function GamePage() {
   };
 
   // Check if game is completed
-  if (gameState.questionCount >= game.questions) {
-    // Submit any remaining answers before redirecting
-    return <ReviewComplete gameId={game.gameId} score={gameState.score} totalQuestions={game.questions} />;
+  if (gameState.completedWords.length === game.cards.length) {
+    return <ReviewComplete
+      gameId={game.gameId}
+      flashcardsCount={game.cards.length}
+      answeredCount={gameState.questionCount}
+    />;
   }
 
   return (
@@ -195,8 +202,7 @@ export default function GamePage() {
               </label>
 
               <div className="text-right">
-                <p className="text-sm text-gray-500">Questions: {gameState.questionCount} / {game.questions}</p>
-                <p className="text-sm font-semibold">Score: {gameState.score}</p>
+                <p className="text-sm text-gray-500">Completed words: {gameState.completedWords.length} / {game.cards.length}</p>
               </div>
             </div>
           </div>

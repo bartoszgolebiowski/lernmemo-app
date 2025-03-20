@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { getAuth } from "@clerk/remix/ssr.server";
 import { json, redirect } from "@remix-run/node";
 import { useNavigate, Form, useLoaderData } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
@@ -7,8 +9,8 @@ import { z } from 'zod';
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { createGameService } from "~/lib/services/gameService";
 import { createCsvImportService } from "~/lib/services/csvImportService";
-import React, { useState } from 'react';
-import { getAuth } from "@clerk/remix/ssr.server";
+import { CardSelection } from "~/components/review/CardSelection";
+import { AttachmentTable } from "~/components/review/AttachmentTable";
 
 export const meta: MetaFunction = () => {
   return [
@@ -57,8 +59,7 @@ export const loader = async (args: LoaderFunctionArgs) => {
 
 const startReviewSchema = zfd.formData({
   cards: zfd.numeric(z.number().positive()),
-  questions: zfd.numeric(z.number().positive()),
-  attachmentId: zfd.text(z.string().uuid()),
+  attachmentIds: zfd.repeatable(z.array(z.string().uuid())),
 });
 
 const closeReviewSchema = zfd.formData({
@@ -83,12 +84,12 @@ export const action = async (args: ActionFunctionArgs) => {
       return json({ errors: validation.error.format() }, { status: 400 });
     }
 
-    const { cards, questions, attachmentId } = validation.data;
+    const { cards, attachmentIds } = validation.data;
 
     // Use GameService to create a new game
     const gameService = createGameService(db);
     try {
-      const result = await gameService.createGame(attachmentId, userId, cards, questions);
+      const result = await gameService.createGame(attachmentIds, userId, cards);
       return redirect(`/dashboard/game/${result.gameId}`);
     } catch (error) {
       return json({ errors: 'Failed to create game' }, { status: 500 });
@@ -121,6 +122,7 @@ export default function ReviewPage() {
   const { uncompletedGames, attachmentsWithTranslations } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
+  const [selectedAttachments, setSelectedAttachments] = useState<Set<string>>(new Set());
 
   const toggleExpand = (attachmentId: string) => {
     setExpandedAttachments(prev => {
@@ -132,6 +134,39 @@ export default function ReviewPage() {
       }
       return newSet;
     });
+  };
+
+  const toggleAttachment = (attachmentId: string) => {
+    setSelectedAttachments(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(attachmentId)) {
+        newSet.delete(attachmentId);
+      } else {
+        newSet.add(attachmentId);
+      }
+      return newSet;
+    });
+  };
+
+  // Add Submit button section at the bottom of the form
+  const renderSubmitButton = () => {
+    if (selectedAttachments.size === 0) return null;
+
+    return (
+      <div className="mt-6 flex justify-end">
+        <button
+          type="submit"
+          name="type"
+          value="start"
+          className="inline-flex items-center justify-center py-2 px-6 border border-transparent shadow-sm text-base font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+          </svg>
+          Start Review with Selected Sets ({selectedAttachments.size})
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -215,186 +250,28 @@ export default function ReviewPage() {
               <input type="hidden" id="type" name="type" value="start" />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                {/* Cards Selection */}
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900 mb-3">Cards Per Review</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Select how many flashcards will be included in your review session.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {[10, 20, 30].map((value) => (
-                      <label key={`cards-${value}`} className="relative cursor-pointer" aria-label={`Select ${value} cards`}>
-                        <input
-                          type="radio"
-                          className="sr-only peer"
-                          name="cards"
-                          value={value}
-                          defaultChecked={value === 10}
-                        />
-                        <div className="w-16 h-16 flex items-center justify-center rounded-lg 
-                                      bg-white border-2 border-gray-200 text-gray-500
-                                      peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700
-                                      hover:bg-gray-50 transition-all duration-200">
-                          <span className="text-lg font-medium">{value}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Questions Selection */}
-                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                  <h3 className="text-lg font-medium text-gray-900 mb-3">Questions to Complete</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Select how many questions you need to answer to complete the review.
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    {[10, 20, 30, 50].map((value) => (
-                      <label key={`questions-${value}`} className="relative cursor-pointer" aria-label={`Select ${value} questions`}>
-                        <input
-                          type="radio"
-                          className="sr-only peer"
-                          name="questions"
-                          value={value}
-                          defaultChecked={value === 20}
-                        />
-                        <div className="w-16 h-16 flex items-center justify-center rounded-lg 
-                                      bg-white border-2 border-gray-200 text-gray-500
-                                      peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700
-                                      hover:bg-gray-50 transition-all duration-200">
-                          <span className="text-lg font-medium">{value}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <CardSelection />
               </div>
 
               <div className="mb-6">
                 <span className="block text-lg font-medium text-gray-900 mb-4">
-                  Select Flashcard Set
+                  Select Flashcard Sets
                 </span>
                 {attachmentsWithTranslations.length > 0 ? (
-                  <div className="border rounded-md overflow-hidden">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Review
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Flashcards Count
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Language
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Uploaded At
-                          </th>
-                          <th align="right" scope="col" className="px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Show Flashcards
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {attachmentsWithTranslations.map((attachment) => (
-                          <React.Fragment key={attachment.attachmentId}>
-                            <tr className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <button
-                                  type="submit"
-                                  name="attachmentId"
-                                  value={attachment.attachmentId}
-                                  disabled={attachmentsWithTranslations.length === 0}
-                                  className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                                >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                                  </svg>
-                                  Start
-                                </button>
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {attachment.translationCardCount}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {attachment.targetLanguage}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                {attachment.importedAt}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                  onClick={() => toggleExpand(attachment.attachmentId)}
-                                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                                >
-                                  <span className="mr-1">
-                                    {expandedAttachments.has(attachment.attachmentId) ? "▼" : "▶"}
-                                  </span>
-                                  {expandedAttachments.has(attachment.attachmentId) ? "Hide" : "View"}
-                                </button>
-                              </td>
-                            </tr>
-                            {expandedAttachments.has(attachment.attachmentId) && (
-                              <>
-                                <tr>
-                                  <td colSpan={5} className="px-6 py-4">
-                                    <div className="border rounded-md overflow-x-auto">
-                                      <table className="min-w-full divide-y divide-gray-200">
-                                        <thead className="bg-gray-50">
-                                          <tr>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                              Word
-                                            </th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                              Translation
-                                            </th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="bg-white divide-y divide-gray-200">
-                                          {attachment.translations.map((translation, idx) => (
-                                            <tr key={idx} className="hover:bg-gray-50">
-                                              <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
-                                                {translation.flashcard_translation?.word}
-                                              </td>
-                                              <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
-                                                {translation.flashcard_translation?.translation}
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </td>
-                                </tr>
-                                <tr>
-                                  <td colSpan={5} className="px-6 py-4 text-center bg-gray-50">
-                                    <button
-                                      type="submit"
-                                      name="attachmentId"
-                                      value={attachment.attachmentId}
-                                      className="inline-flex items-center justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                    >
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                                      </svg>
-                                      Start Review with this Set
-                                    </button>
-                                  </td>
-                                </tr>
-                              </>
-                            )}
-                          </React.Fragment>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <AttachmentTable
+                    attachments={attachmentsWithTranslations}
+                    expandedAttachments={expandedAttachments}
+                    selectedAttachments={selectedAttachments}
+                    toggleExpand={toggleExpand}
+                    toggleAttachment={toggleAttachment}
+                  />
                 ) : (
                   <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
                     <p className="text-yellow-700">No attachments found. Please upload some flashcards first.</p>
                   </div>
                 )}
               </div>
+              {renderSubmitButton()}
             </Form>
           </div>
         </div>

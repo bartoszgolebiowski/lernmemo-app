@@ -1,0 +1,1 @@
+ALTER TABLE `flashcard_game` DROP COLUMN `questions`;

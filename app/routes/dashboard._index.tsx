@@ -55,7 +55,7 @@ export const action = async (args: ActionFunctionArgs) => {
     if (!attachment) {
       return json({ errors: 'No attachment found' }, { status: 400 });
     }
-    const result = await gameService.createGame(attachment.attachmentId, userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+    const result = await gameService.createGame([attachment.attachmentId], userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
     return redirect(`/dashboard/game/${result.gameId}`);
   } catch (error) {
     return json({ errors: 'Failed to create game' }, { status: 500 });

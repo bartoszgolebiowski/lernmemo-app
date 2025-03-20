@@ -71,7 +71,7 @@ export const action = async (args: ActionFunctionArgs) => {
     // Use GameService to create a new game
     const gameService = createGameService(db);
     try {
-      const result = await gameService.createGame(resultImprot.attachment.attachmentId, userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+      const result = await gameService.createGame([resultImprot.attachment.attachmentId], userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
       return json({ gameId: result.gameId });
     } catch (error) {
       return json({ errors: 'Failed to create game' }, { status: 500 });

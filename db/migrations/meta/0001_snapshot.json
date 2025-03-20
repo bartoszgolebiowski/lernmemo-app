@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8d1da20d-2002-4eaa-a896-b6a482c78318",
-  "prevId": "322e8ae1-83e7-47dd-b95e-ff2c9883a06a",
+  "id": "bfefe8b2-ad99-4e7b-863f-eb31eddbe5f0",
+  "prevId": "58ecc79e-43a5-452e-b7e4-9a81db753c2b",
   "tables": {
     "flashcard_attachment": {
       "name": "flashcard_attachment",
@@ -80,22 +80,8 @@
           "notNull": false,
           "autoincrement": false
         },
-        "attachment_id": {
-          "name": "attachment_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "cards": {
           "name": "cards",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "questions": {
-          "name": "questions",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -103,21 +89,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "flashcard_game_attachment_id_flashcard_attachment_attachment_id_fk": {
-          "name": "flashcard_game_attachment_id_flashcard_attachment_attachment_id_fk",
-          "tableFrom": "flashcard_game",
-          "tableTo": "flashcard_attachment",
-          "columnsFrom": [
-            "attachment_id"
-          ],
-          "columnsTo": [
-            "attachment_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -197,6 +169,65 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "flashcard_game_attachment": {
+      "name": "flashcard_game_attachment",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attachment_id": {
+          "name": "attachment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "flashcard_game_attachment_game_id_flashcard_game_game_id_fk": {
+          "name": "flashcard_game_attachment_game_id_flashcard_game_game_id_fk",
+          "tableFrom": "flashcard_game_attachment",
+          "tableTo": "flashcard_game",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "game_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "flashcard_game_attachment_attachment_id_flashcard_attachment_attachment_id_fk": {
+          "name": "flashcard_game_attachment_attachment_id_flashcard_attachment_attachment_id_fk",
+          "tableFrom": "flashcard_game_attachment",
+          "tableTo": "flashcard_attachment",
+          "columnsFrom": [
+            "attachment_id"
+          ],
+          "columnsTo": [
+            "attachment_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "flashcard_game_attachment_game_id_attachment_id_pk": {
+          "columns": [
+            "game_id",
+            "attachment_id"
+          ],
+          "name": "flashcard_game_attachment_game_id_attachment_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -344,6 +375,72 @@
         },
         "target_language": {
           "name": "target_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "subscription": {
+      "name": "subscription",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "plan": {
+          "name": "plan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subscription_group_id": {
+          "name": "subscription_group_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
           "type": "text",
           "primaryKey": false,
           "notNull": true,

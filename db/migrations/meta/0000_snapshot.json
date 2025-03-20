@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "322e8ae1-83e7-47dd-b95e-ff2c9883a06a",
+  "id": "58ecc79e-43a5-452e-b7e4-9a81db753c2b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "flashcard_attachment": {
@@ -80,13 +80,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "attachment_id": {
-          "name": "attachment_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "cards": {
           "name": "cards",
           "type": "integer",
@@ -103,21 +96,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "flashcard_game_attachment_id_flashcard_attachment_attachment_id_fk": {
-          "name": "flashcard_game_attachment_id_flashcard_attachment_attachment_id_fk",
-          "tableFrom": "flashcard_game",
-          "tableTo": "flashcard_attachment",
-          "columnsFrom": [
-            "attachment_id"
-          ],
-          "columnsTo": [
-            "attachment_id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -197,6 +176,65 @@
         }
       },
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "flashcard_game_attachment": {
+      "name": "flashcard_game_attachment",
+      "columns": {
+        "game_id": {
+          "name": "game_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attachment_id": {
+          "name": "attachment_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "flashcard_game_attachment_game_id_flashcard_game_game_id_fk": {
+          "name": "flashcard_game_attachment_game_id_flashcard_game_game_id_fk",
+          "tableFrom": "flashcard_game_attachment",
+          "tableTo": "flashcard_game",
+          "columnsFrom": [
+            "game_id"
+          ],
+          "columnsTo": [
+            "game_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "flashcard_game_attachment_attachment_id_flashcard_attachment_attachment_id_fk": {
+          "name": "flashcard_game_attachment_attachment_id_flashcard_attachment_attachment_id_fk",
+          "tableFrom": "flashcard_game_attachment",
+          "tableTo": "flashcard_attachment",
+          "columnsFrom": [
+            "attachment_id"
+          ],
+          "columnsTo": [
+            "attachment_id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "flashcard_game_attachment_game_id_attachment_id_pk": {
+          "columns": [
+            "game_id",
+            "attachment_id"
+          ],
+          "name": "flashcard_game_attachment_game_id_attachment_id_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
@@ -353,6 +391,118 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "subscription": {
+      "name": "subscription",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "plan": {
+          "name": "plan",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "subscription_group_id": {
+          "name": "subscription_group_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user_action": {
+      "name": "user_action",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text(255)",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {
+        "user_action_id_created_at_pk": {
+          "columns": [
+            "id",
+            "created_at"
+          ],
+          "name": "user_action_id_created_at_pk"
+        }
+      },
       "uniqueConstraints": {},
       "checkConstraints": {}
     }

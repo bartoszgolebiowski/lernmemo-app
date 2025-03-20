@@ -13,7 +13,6 @@ interface GameState {
   currentQuestion: string | null;
   correctAnswer: string | null;
   selectedTranslationId: string | null;
-  score: number;
   questionCount: number;
   possibleAnswers: PossibleAnswer[];
   completedWords: PossibleAnswer[];
@@ -22,14 +21,14 @@ interface GameState {
 type GameAction =
   | {
       type: "NEXT_QUESTION";
-      payload: { cards: Card[]; maxQuestions: number; seed: number };
+      payload: { cards: Card[]; seed: number };
     }
   | { type: "SELECT_ANSWER"; payload: { translationId: string } }
   | {
       type: "INITIALIZE";
       payload: {
         cards: Card[];
-        score: number;
+        completedFlaschcards: number;
         questionCount: number;
         seed: number;
       };
@@ -39,7 +38,6 @@ const initialState: GameState = {
   currentQuestion: null,
   correctAnswer: null,
   selectedTranslationId: null,
-  score: 0,
   questionCount: 0,
   completedWords: [],
   possibleAnswers: [],
@@ -80,9 +78,13 @@ function sortArrayRandomly<T>(arr: T[], seed: number): T[] {
   return arrWithKeys.map((item) => item.value);
 }
 
+function getNElements<T>(arr: T[], n: number): T[] {
+  return arr.slice(0, n);
+}
+
 export const initialize = (
   cards: Card[],
-  score: number,
+  completedFlaschcards: number,
   questionCount: number,
   seed: number
 ) => {
@@ -110,19 +112,29 @@ export const initialize = (
     currentQuestion: questionCard.word!,
     correctAnswer: questionCard.translationId!,
     possibleAnswers: sortArrayRandomly(allAnswers, seed * randomIndex),
-    score,
     questionCount,
+    completedWords: sortArrayRandomly(
+      getNElements(
+        cards.map((card) => ({
+          translation: card.translation!,
+          translationId: card.translationId!,
+        })),
+        completedFlaschcards
+      ),
+      seed * randomIndex
+    ),
   };
 };
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case "INITIALIZE": {
-      const { cards, score, questionCount, seed } = action.payload;
-      return initialize(cards, score, questionCount, seed);
+      const { cards, completedFlaschcards, questionCount, seed } =
+        action.payload;
+      return initialize(cards, completedFlaschcards, questionCount, seed);
     }
     case "NEXT_QUESTION": {
-      const { cards, maxQuestions, seed } = action.payload;
+      const { cards, seed } = action.payload;
 
       let availableCards = cards.filter(
         (card) =>
@@ -131,13 +143,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
             .includes(card.translationId!)
       );
 
-      console.log("availableCards", availableCards);
       if (availableCards.length === 0) {
         availableCards = cards;
-      }
-
-      if (state.questionCount >= maxQuestions) {
-        return state;
       }
 
       const questionCard = availableCards[seed % availableCards.length];
@@ -185,7 +192,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
       return {
         ...state,
-        score: isCorrect ? state.score + 1 : state.score,
         completedWords: newCompletedWords,
         selectedTranslationId: action.payload.translationId,
         questionCount: state.questionCount + 1,
@@ -199,13 +205,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
 
 // Action Creators
 export const gameActions = {
-  nextQuestion: (
-    cards: Card[],
-    maxQuestions: number,
-    seed: number
-  ): GameAction => ({
+  nextQuestion: (cards: Card[], seed: number): GameAction => ({
     type: "NEXT_QUESTION",
-    payload: { cards, maxQuestions, seed },
+    payload: { cards, seed },
   }),
 
   selectAnswer: (translationId: string): GameAction => ({
@@ -214,11 +216,11 @@ export const gameActions = {
   }),
   initialize: (
     cards: Card[],
-    score: number,
+    completedFlaschcards: number,
     questionCount: number,
     seed: number
   ): GameAction => ({
     type: "INITIALIZE",
-    payload: { cards, score, questionCount, seed },
+    payload: { cards, completedFlaschcards, questionCount, seed },
   }),
 };

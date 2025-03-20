@@ -3,20 +3,16 @@ import { Link, useNavigate, useFetcher } from "@remix-run/react";
 
 interface ReviewCompleteProps {
   gameId: string;
-  score: number;
-  totalQuestions: number;
+  flashcardsCount: number; // Renamed from score
+  answeredCount: number; // Renamed from totalQuestions
 }
 
-export default function ReviewComplete({ gameId, score, totalQuestions }: ReviewCompleteProps) {
+export default function ReviewComplete({ gameId, flashcardsCount, answeredCount }: ReviewCompleteProps) {
   const navigate = useNavigate();
   const [countdown, setCountdown] = useState(5);
   const fetcher = useFetcher();
 
-  // Calculate percentage score
-  const percentage = Math.round((score / totalQuestions) * 100);
-
   useEffect(() => {
-    // Set up countdown and redirect
     const timer = setInterval(() => {
       setCountdown(prev => prev - 1);
     }, 1000);
@@ -25,7 +21,6 @@ export default function ReviewComplete({ gameId, score, totalQuestions }: Review
       navigate(`/dashboard/summary/${gameId}`);
     }, 5000);
 
-    // Cleanup timers
     return () => {
       clearInterval(timer);
       clearTimeout(redirect);
@@ -48,12 +43,11 @@ export default function ReviewComplete({ gameId, score, totalQuestions }: Review
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h2 className="text-2xl font-bold text-gray-800">Review Complete!</h2>
+          <h2 className="text-2xl font-bold text-gray-800">Final Score</h2>
         </div>
 
         <div className="mb-8">
-          <div className="text-4xl font-bold text-gray-900 mb-2">{score} / {totalQuestions}</div>
-          <div className="text-lg text-gray-600">Your score: {percentage}%</div>
+          <div className="text-4xl font-bold text-gray-900 mb-2">{flashcardsCount} / {answeredCount}</div>
         </div>
 
         <div className="mb-6 flex flex-col space-y-3">
