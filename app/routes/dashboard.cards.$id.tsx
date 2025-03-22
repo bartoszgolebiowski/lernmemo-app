@@ -1,0 +1,243 @@
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { useLoaderData, Form, useNavigate } from "@remix-run/react";
+import { z } from "zod";
+import { db } from "~/db/index";
+import React, { useState, useCallback, useMemo, useTransition, useRef } from 'react';
+import { getAuth } from "@clerk/remix/ssr.server";
+import { createFlashcardEditService } from "~/lib/services/flashcardEditService";
+import { FlashcardEditorHeader } from "~/components/cards/FlashcardEditorHeader";
+import { BackButton } from "~/components/cards/BackButton";
+import { FlashcardTable } from "~/components/cards/FlashcardTable";
+import { FlashcardEditorActions } from "~/components/cards/FlashcardEditorActions";
+import type { FlashcardRowData } from "~/components/cards/FlashcardTableRow";
+
+export const meta: MetaFunction = () => {
+  return [{ title: "Edit Flashcard - Lernmemo App" }];
+};
+
+// Schema for validation
+const flashcardSchema = z.object({
+  rows: z.array(
+    z.object({
+      id: z.string().optional(),
+      word: z.string().min(1, "Word is required"),
+      translation: z.string().min(1, "Translation is required"),
+      isDeleted: z.boolean().optional(),
+    })
+  ).min(1, "At least one row is required"),
+});
+
+export const loader = async (args: LoaderFunctionArgs) => {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    return redirect("/sign-in");
+  }
+
+  const flashcardId = args.params.id;
+  if (!flashcardId) {
+    return redirect("/dashboard/cards");
+  }
+
+  const flashcardEditService = createFlashcardEditService(db);
+
+  // Get the flashcard using the edit service
+  const flashcardData = await flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
+
+  if (!flashcardData) {
+    return redirect("/dashboard/cards");
+  }
+
+  return json({
+    flashcard: {
+      id: flashcardData.attachmentId,
+      rows: flashcardData.translations.map(t => ({
+        id: t.id,
+        word: t.word,
+        translation: t.translation,
+      })),
+    },
+  });
+};
+
+export const action = async (args: ActionFunctionArgs) => {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    return redirect("/sign-in");
+  }
+
+  const flashcardId = args.params.id;
+  if (!flashcardId) {
+    return json({ error: "Flashcard ID is required" }, { status: 400 });
+  }
+
+  const formData = await args.request.formData();
+
+  try {
+    const rawRows = formData.get("tableRows")?.toString() || "[]";
+    const data = { rows: JSON.parse(rawRows) };
+
+    const validation = flashcardSchema.safeParse(data);
+
+    if (!validation.success) {
+      return json({
+        success: false,
+        values: data
+      }, { status: 400 });
+    }
+
+    const flashcardEditService = createFlashcardEditService(db);
+
+    // First fetch the existing flashcard to verify ownership
+    const existingFlashcard = await flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
+    if (!existingFlashcard) {
+      return json({ success: false, message: "Unauthorized or flashcard not found" }, { status: 403 });
+    }
+
+    // Prepare translations with the word field for the service
+    const updatedTranslations = validation.data.rows.map(r => ({
+      id: r.id,
+      word: r.word,
+      translation: r.translation,
+      targetLanguage: "auto", // Default to auto for existing UI
+      isDeleted: r.isDeleted
+    }));
+
+    // Update the flashcard with the structured data
+    await flashcardEditService.updateFlashcard(
+      flashcardId,
+      { translations: updatedTranslations },
+      userId
+    );
+
+    return json({
+      success: true,
+      message: "Flashcard updated successfully"
+    });
+  } catch (error) {
+    console.error("Failed to update flashcard:", error);
+    return json({
+      success: false,
+      message: "An error occurred while updating the flashcard"
+    }, { status: 500 });
+  }
+};
+
+export default function EditFlashcardPage() {
+  const { flashcard } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
+  const newRowInputRef = useRef<HTMLInputElement>(null);
+
+  // Local state for managing translations; ensure each row has a unique id:
+  const [tableRows, setTableRows] = useState<FlashcardRowData[]>(
+    flashcard.rows.map(row => ({ id: row.id || Date.now().toString(), ...row }))
+  );
+
+  // Handle row change with debounced update
+  const handleRowChange = useCallback((index: number, field: "word" | "translation", value: string) => {
+    setTableRows(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  }, []);
+
+  // Add a new row with a unique id
+  const addRow = useCallback(() => {
+    setTableRows(prev => [...prev, { id: Date.now().toString(), word: "", translation: "" }]);
+    // Focus on the new row's first input after a short delay for the DOM to update
+    setTimeout(() => {
+      if (newRowInputRef.current) {
+        newRowInputRef.current.focus();
+      }
+    }, 50);
+  }, []);
+
+  // Remove a row
+  const removeRow = useCallback((index: number) => {
+    setTableRows(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Handle keyboard navigation between cells
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>, index: number, field: "word" | "translation") => {
+    if (e.key === 'Tab' && !e.shiftKey && field === 'translation' && index === tableRows.length - 1) {
+      e.preventDefault();
+      addRow();
+    }
+  }, [addRow, tableRows.length]);
+
+  // Compute duplicate words
+  const wordCounts = useMemo(() => {
+    return tableRows.reduce((acc, row) => {
+      const word = row.word.trim();
+      if (word) acc[word] = (acc[word] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [tableRows]);
+
+  // Inline errors per row: mark empty fields and duplicate words
+  const getRowErrors = useCallback((row: FlashcardRowData) => {
+    const errors: { word?: string; translation?: string } = {};
+    if (!row.word.trim()) errors.word = "Word is required";
+    if (!row.translation.trim()) errors.translation = "Translation is required";
+    if (row.word.trim() && wordCounts[row.word.trim()] > 1) errors.word = "Duplicate word";
+    return errors;
+  }, [wordCounts]);
+
+  // Overall form validity: every row must have non-empty fields and no duplicate errors
+  const isFormValid = useMemo(() => {
+    if (tableRows.length === 0) return false;
+    return tableRows.every(row => {
+      const errors = getRowErrors(row);
+      return !errors.word && !errors.translation;
+    });
+  }, [tableRows, getRowErrors]);
+
+  // Handle form submission
+  const handleSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(() => {
+      // Let the form submit naturally
+    });
+  }, []);
+
+  return (
+    <main className="py-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <FlashcardEditorHeader />
+
+        <div className="mb-6">
+          <BackButton onClick={() => navigate("/dashboard/cards")} />
+        </div>
+
+        <div className="bg-white shadow rounded-lg overflow-hidden">
+          <Form method="post" onSubmit={handleSubmit} className="divide-y divide-gray-200">
+            <input type="hidden" name="tableRows" value={JSON.stringify(tableRows)} />
+
+            <div className="overflow-x-auto">
+              <FlashcardTable
+                rows={tableRows}
+                getRowErrors={getRowErrors}
+                handleRowChange={handleRowChange}
+                handleKeyDown={handleKeyDown}
+                removeRow={removeRow}
+                addRow={addRow}
+                newRowInputRef={newRowInputRef}
+              />
+            </div>
+
+            <FlashcardEditorActions
+              addRow={addRow}
+              onCancel={() => navigate("/dashboard/cards")}
+              isPending={isPending}
+              isFormValid={isFormValid}
+            />
+          </Form>
+        </div>
+      </div>
+    </main>
+  );
+}

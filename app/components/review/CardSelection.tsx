@@ -1,4 +1,5 @@
 import React from 'react';
+import { GameService } from '~/lib/services/gameService';
 
 export const CardSelection = () => {
   return (
@@ -8,7 +9,7 @@ export const CardSelection = () => {
         Select how many flashcards will be included in your review session.
       </p>
       <div className="flex flex-wrap gap-3">
-        {[10, 20, 30, 2137].map((value) => (
+        {[10, 20, 30, GameService.ALL_FLASHCARDS].map((value) => (
           <label key={`cards-${value}`} className="relative cursor-pointer" aria-label={`Select ${value} cards`}>
             <input
               type="radio"
@@ -21,7 +22,7 @@ export const CardSelection = () => {
                           bg-white border-2 border-gray-200 text-gray-500
                           peer-checked:bg-green-50 peer-checked:border-green-500 peer-checked:text-green-700
                           hover:bg-gray-50 transition-all duration-200">
-              <span className="text-lg font-medium">{value === 2137 ? "All" : value}</span>
+              <span className="text-lg font-medium">{value === GameService.ALL_FLASHCARDS ? "All" : value}</span>
             </div>
           </label>
         ))}

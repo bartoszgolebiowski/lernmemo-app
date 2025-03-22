@@ -1,6 +1,12 @@
-# AI Rules for {{project-name}}
+# AI Rules for lernmemo
 
-{{project-description}}
+# App Vision
+
+This project is about building a powerful yet user-friendly flashcard application that simplifies how users create and study flashcards. Our primary goals are:
+
+1. **Ease of Use**: Quickly create flashcards from images, CSV files, or manual inputs.  
+2. **Engaging Study Experience**: Provide a flashcard game that is flexible and convenient for regular practice.  
+3. **Accessibility & Growth**: Allow users to register, track progress, and scale up to a premium plan with higher limits.
 
 ## Coding practices
 
@@ -27,21 +33,21 @@
 - Implement the test.each pattern for parameterized tests
 - Use the setup files for global test configuration
 - Leverage the inline snapshot feature for small snapshots
-- Implement coverage reporting with c8 integration
 - Use the watch mode for development
 - Leverage the UI mode for interactive test exploration
 - Implement mocking for modules and dependencies
-- Use happy-dom or jsdom for DOM testing environment
+- Use happy-dom for DOM testing environment
 
 ## Database
 
 ### Guidelines for SQL
 
-#### SQLLite
+#### SQLite
 
-- Use connection pooling to manage database connections efficiently
-- Implement JSONB columns for semi-structured data instead of creating many tables for {{flexible_data}}
-- Use materialized views for complex, frequently accessed read-only data
+- **SQLite + Drizzle-ORM + Turso**
+  - Primary relational database is SQLite for local development.
+  - Drizzle-ORM provides a type-safe, lightweight ORM layer.
+  - Turso offers an external database service (HTTP-based) for synchronization and/or production data storage.
 
 ## Frontend
 
@@ -50,10 +56,7 @@
 #### React Coding Standards
 
 - Use functional components with hooks instead of class components
-- Implement React.memo() for expensive components that render often with the same props
-- Utilize React.lazy() and Suspense for code-splitting and performance optimization
 - Use the useCallback hook for event handlers passed to child components to prevent unnecessary re-renders
-- Prefer useMemo for expensive calculations to avoid recomputation on every render
 - Use the new use hook for data fetching in React 19+ projects
 - Leverage Server Components for {{data_fetching_heavy_components}} when using React with Next.js or similar frameworks
 - Consider using the new useOptimistic hook for optimistic UI updates in forms

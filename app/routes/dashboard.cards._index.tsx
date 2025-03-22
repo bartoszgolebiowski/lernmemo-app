@@ -1,13 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useActionData, useLoaderData, Form } from "@remix-run/react";
+import { useActionData, useLoaderData, Form, useNavigate, Link } from "@remix-run/react";
 import { z } from "zod";
 import { zfd } from "zod-form-data";
 import { db } from "~/db/index";
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { ImportSection } from "~/components/dashboard/ImportSection";
 import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
-import React, { useState } from 'react';
 import { getAuth } from "@clerk/remix/ssr.server";
 import { createFileStorageService } from "~/lib/services/fileStorageService";
 import { env } from "~/lib/env";
@@ -59,7 +58,7 @@ export const loader = async (args: LoaderFunctionArgs) => {
 
 const toggleActionSchema = zfd.formData({
   attachmentId: zfd.text(z.string().uuid()),
-})
+});
 
 export const action = async (args: ActionFunctionArgs) => {
   const { userId } = await getAuth(args);
@@ -96,30 +95,25 @@ export const action = async (args: ActionFunctionArgs) => {
 export default function ManageCardsPage() {
   const { attachments } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
-
-  const toggleExpand = (attachmentId: string) => {
-    setExpandedAttachments(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(attachmentId)) {
-        newSet.delete(attachmentId);
-      } else {
-        newSet.add(attachmentId);
-      }
-      return newSet;
-    });
-  };
+  const navigate = useNavigate();
 
   return (
     <main className="py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-4">
+        <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Manage Your Flashcards</h1>
           <p className="mt-1 text-sm text-gray-500">
             View and manage all your imported flashcard sets. You can see details of each set,
             temporarily disable sets you do not need right now, or add new cards through our import options.
           </p>
-
+        </div>
+        <div className="mb-6">
+          <button
+            onClick={() => navigate("/dashboard")}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+          >
+            ← Back to Dashboard
+          </button>
         </div>
 
         <ImportSection
@@ -155,6 +149,9 @@ export default function ManageCardsPage() {
                     <thead className="bg-gray-50">
                       <tr>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Details
+                        </th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Attachment
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -173,89 +170,50 @@ export default function ManageCardsPage() {
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                       {attachments.map((attachment) => (
-                        <React.Fragment key={attachment.id}>
-                          <tr className={!attachment.isActive ? "bg-gray-100" : ""}>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                        <tr key={attachment.id} className={!attachment.isActive ? "bg-gray-100" : ""}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <Link to={`/dashboard/cards/${attachment.id}`} className="text-blue-600 hover:underline">
+                              View Details
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {attachment.fileLocation.endsWith(".csv") ? (
+                              <a href={attachment.presignedUrl} download className="text-blue-600 hover:underline">
+                                Download CSV
+                              </a>
+                            ) : (
                               <AttachmentPreview
                                 fileUrl={attachment.presignedUrl}
                                 fileLocation={attachment.fileLocation}
-                                translations={attachment.translations}
                               />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {attachment.targetLanguage}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {attachment.wordCount}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {attachment.createdAt}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <div className="flex justify-end gap-2">
-                                <Form method="post">
-                                  <input type="hidden" name="attachmentId" value={attachment.id} />
-                                  <button
-                                    type="submit"
-                                    className={`inline-flex items-center px-3 py-1.5 rounded-md ${attachment.isActive
-                                      ? "bg-orange-100 text-orange-700 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
-                                      : "bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
-                                      }`}
-                                  >
-                                    <span className="mr-1">
-                                      {attachment.isActive ? <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 01-7.5 0" />
-                                      </svg> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                                      </svg>}
-                                    </span>
-                                  </button>
-                                </Form>
-                                <button
-                                  onClick={() => toggleExpand(attachment.id)}
-                                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                                >
-                                  <span className="mr-1">
-                                    {expandedAttachments.has(attachment.id) ? "▼" : "▶"}
-                                  </span>
-                                  {expandedAttachments.has(attachment.id) ? "Hide" : "View"}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                          {expandedAttachments.has(attachment.id) && (
-                            <tr>
-                              <td colSpan={5} className="px-6 py-4">
-                                <div className="border rounded-md overflow-x-auto">
-                                  <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                      <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                          Word
-                                        </th>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                          Translation
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                      {attachment.translations.map((translation, idx) => (
-                                        <tr key={idx} className="hover:bg-gray-50">
-                                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
-                                            {translation.word}
-                                          </td>
-                                          <td className="px-6 py-2 whitespace-nowrap text-sm text-gray-900">
-                                            {translation.translation}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {attachment.targetLanguage}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {attachment.wordCount}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {attachment.createdAt}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <Form method="post">
+                              <input type="hidden" name="attachmentId" value={attachment.id} />
+                              <button
+                                type="submit"
+                                className={`inline-flex items-center px-3 py-1.5 rounded-md ${attachment.isActive
+                                  ? "bg-orange-100 text-orange-700 hover:bg-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                  : "bg-green-100 text-green-700 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-green-500"
+                                  }`}
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="black">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </Form>
+                          </td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>

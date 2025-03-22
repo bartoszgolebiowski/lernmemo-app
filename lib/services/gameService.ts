@@ -1,4 +1,4 @@
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { DrizzleDatabase } from "~/db/index";
 import {
   flashcardGame,
@@ -10,7 +10,7 @@ import {
 } from "~/db/schema/flashcard";
 
 export class GameService {
-  private static ALL_FLASHCARDS = 2137;
+  public static ALL_FLASHCARDS = 2137;
 
   constructor(private db: DrizzleDatabase) {}
 
@@ -100,7 +100,7 @@ export class GameService {
         if (flashcards === GameService.ALL_FLASHCARDS) {
           flashcards = await this.getAttachmentsFlaschardCound(attachmentIds);
         }
-        
+
         const games = await tx
           .insert(flashcardGame)
           .values({
@@ -313,25 +313,14 @@ export class GameService {
   private async getAttachmentsFlaschardCound(
     attachmentIds: string[]
   ): Promise<number> {
-    const translationsArrays = await Promise.all(
-      attachmentIds.map((id) => this.getTranslationsFromAttachment(id))
-    );
-    const totalWords = translationsArrays.reduce(
-      (sum, translations) => sum + translations.length,
-      0
-    );
-    return totalWords;
-  }
-
-  private async getTranslationsFromAttachment(attachmentId: string) {
-    return this.db
-      .select()
+    const result = await this.db
+      .select({
+        count: sql<number>`count(*)`,
+      })
       .from(flashcardImport)
-      .leftJoin(
-        flashcardTranslation,
-        eq(flashcardImport.translationId, flashcardTranslation.translationId)
-      )
-      .where(eq(flashcardImport.attachmentId, attachmentId));
+      .where(inArray(flashcardImport.attachmentId, attachmentIds));
+
+    return result[0]?.count ?? 0;
   }
 }
 
