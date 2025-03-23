@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, Form, useNavigate, useNavigation } from "@remix-run/react";
+import { useLoaderData, Form, useNavigate, useNavigation, useActionData } from "@remix-run/react";
 import { z } from "zod";
 import { db } from "~/db/index";
 import React, { useState, useCallback, useMemo, useRef } from 'react';
@@ -12,6 +12,8 @@ import { FlashcardEditorActions } from "~/components/cards/FlashcardEditorAction
 import type { FlashcardRowData } from "~/components/cards/FlashcardTableRow";
 import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
 import { getServiceProvider } from "~/lib/services";
+import { success, fail, successEmpty, convertZodErrorsToFailResult } from "~/lib/services/utils";
+import { FeedbackNotification } from "~/components/FeedbackNotification";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Edit Flashcard - Lernmemo App" }];
@@ -75,7 +77,7 @@ export const action = async (args: ActionFunctionArgs) => {
 
   const flashcardId = args.params.id;
   if (!flashcardId) {
-    return json({ error: "Flashcard ID is required" }, { status: 400 });
+    return json(fail("Flashcard ID is required", 400), { status: 400 });
   }
 
   const formData = await args.request.formData();
@@ -87,10 +89,10 @@ export const action = async (args: ActionFunctionArgs) => {
     const validation = flashcardSchema.safeParse(data);
 
     if (!validation.success) {
-      return json({
-        success: false,
-        values: data
-      }, { status: 400 });
+      return json(
+        convertZodErrorsToFailResult(validation.error),
+        { status: 400 }
+      );
     }
 
     const services = getServiceProvider(db);
@@ -98,7 +100,7 @@ export const action = async (args: ActionFunctionArgs) => {
     // First fetch the existing flashcard to verify ownership
     const existingFlashcard = await services.flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
     if (!existingFlashcard) {
-      return json({ success: false, message: "Unauthorized or flashcard not found" }, { status: 403 });
+      return json(fail("Unauthorized or flashcard not found", 403), { status: 403 });
     }
 
     // Prepare translations with the word field for the service
@@ -117,16 +119,12 @@ export const action = async (args: ActionFunctionArgs) => {
       userId
     );
 
-    return json({
-      success: true,
-      message: "Flashcard updated successfully"
-    });
+    return json(successEmpty());
   } catch (error) {
-    console.error("Failed to update flashcard:", error);
-    return json({
-      success: false,
-      message: "An error occurred while updating the flashcard"
-    }, { status: 500 });
+    return json(
+      fail("An error occurred while updating the flashcard", 500),
+      { status: 500 }
+    );
   }
 };
 
@@ -136,6 +134,7 @@ export default function EditFlashcardPage() {
   const newRowInputRef = useRef<HTMLInputElement>(null);
   const navigation = useNavigation();
   const isPending = navigation.state === "submitting";
+  const actionData = useActionData<typeof action>();
 
   // Local state for managing translations; ensure each row has a unique id:
   const [tableRows, setTableRows] = useState<FlashcardRowData[]>(
@@ -210,6 +209,7 @@ export default function EditFlashcardPage() {
         <div className="mb-6">
           <BackButton onClick={() => navigate("/dashboard/cards")} />
         </div>
+        {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
 
         {/* Add file preview section */}
         <div className="mb-6 bg-white shadow rounded-lg p-4">

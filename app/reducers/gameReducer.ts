@@ -88,12 +88,6 @@ export const initialize = (
   questionCount: number,
   seed: number
 ) => {
-  console.log({
-    cards,
-    completedFlaschcards,
-    questionCount,
-    seed,
-  });
   const availableCards = cards;
   const randomIndex = createRandomFunction(seed)(0, availableCards.length - 1);
   const questionCard = availableCards[randomIndex];

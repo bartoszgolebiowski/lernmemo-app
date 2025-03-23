@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
+import { useLoaderData, useNavigate, useFetcher, useActionData } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { useEffect, useReducer, useState } from "react";
 import { db } from '~/db/index';
@@ -8,6 +8,8 @@ import { z } from "zod";
 import ReviewComplete from "~/components/ReviewComplete";
 import { getAuth } from "@clerk/remix/ssr.server";
 import { getServiceProvider } from "~/lib/services";
+import { success, fail, successEmpty, convertZodErrorsToFailResult } from "~/lib/services/utils";
+import { FeedbackNotification } from "~/components/FeedbackNotification";
 
 export const meta: MetaFunction = () => {
   return [
@@ -72,22 +74,22 @@ export async function action(args: ActionFunctionArgs) {
   }
 
   const gameId = args.params.id;
-  if (!gameId) return json({ error: "Game ID is required" }, { status: 400 });
+  if (!gameId) return json(fail("Game ID is required", 400), { status: 400 });
 
   const formData = await args.request.formData();
   const answersString = formData.get("answers") as string;
   const completedString = formData.get("completed") as string;
-  if (!answersString) return json({ error: "Answers are required" }, { status: 400 });
-  if (!completedString) return json({ error: "Completed is required" }, { status: 400 });
+  if (!answersString) return json(fail("Answers are required", 400), { status: 400 });
+  if (!completedString) return json(fail("Completed is required", 400), { status: 400 });
 
   const answers = answersSchema.safeParse(JSON.parse(answersString));
   if (!answers.success) {
-    return json({ error: answers.error }, { status: 400 });
+    return json(convertZodErrorsToFailResult(answers.error), { status: 400 });
   }
 
   const completed = completedSchema.safeParse(completedString === "true");
   if (!completed.success) {
-    return json({ error: completed.error }, { status: 400 });
+    return json(convertZodErrorsToFailResult(completed.error), { status: 400 });
   }
 
   const services = getServiceProvider(db);
@@ -98,7 +100,7 @@ export async function action(args: ActionFunctionArgs) {
     return redirect(`/dashboard/game/${gameId}`);
   }
 
-  return json({ success: true });
+  return json(successEmpty());
 }
 
 export default function GamePage() {
@@ -107,6 +109,7 @@ export default function GamePage() {
   const [gameState, dispatch] = useReducer(gameReducer, initialize(game.cards, completedFlaschcards, questionCount, initialSeed));
   const [fastMode, setFastMode] = useState(false);
   const fetcher = useFetcher();
+  const actionData = useActionData<typeof action>();
 
   useEffect(() => {
     dispatch(gameActions.initialize(game.cards, completedFlaschcards, questionCount, initialSeed));
@@ -188,6 +191,8 @@ export default function GamePage() {
             >
               ← Back to Dashboard
             </button>
+
+            {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
 
             <div className="flex items-center gap-6">
               <label className="flex items-center gap-2 bg-white px-3 py-2 rounded-md shadow-sm">

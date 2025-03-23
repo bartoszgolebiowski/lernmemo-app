@@ -1,13 +1,15 @@
 import { useEffect } from 'react';
 import { json, redirect } from "@remix-run/node";
-import { useFetcher, useNavigate } from "@remix-run/react";
+import { useActionData, useFetcher, useNavigate } from "@remix-run/react";
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import ImportImage from '~/components/ImportImage';
+import { FeedbackNotification } from '~/components/FeedbackNotification';
 import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
 import { getAuth } from '@clerk/remix/ssr.server';
 import { getServiceProvider } from '~/lib/services';
-
+import { success, fail, convertZodErrorsToFailResult } from "~/lib/services/utils";
+import { actionTypes } from "~/db/schema/userAction";
 
 export const meta: MetaFunction = () => {
   return [
@@ -46,38 +48,57 @@ export const action = async (args: ActionFunctionArgs) => {
 
   const services = getServiceProvider(db);
 
+  // Check if the user can perform the image import action
+  const isPremium = false; // This should be fetched from your user service
+  const canPerformAction = await services.premiumAccessService.canPerformAction(
+    userId,
+    actionTypes.IMAGE_IMPORT,
+    isPremium
+  );
+
+  if (!canPerformAction) {
+    return json(
+      fail("You've reached your daily limit for image imports. Upgrade to premium for higher limits.", 429),
+      { status: 429 }
+    );
+  }
+
   const validation = actionSchema.safeParse(await args.request.formData());
-  if (!validation.success) return { status: 400, json: validation.error };
+  if (!validation.success) return json(convertZodErrorsToFailResult(validation.error), { status: 400 });
 
   const { language, file, quickGame } = validation.data;
 
-  const [tmpFilePath, localFilePath] = await Promise.all([
-    services.fileStorageService.saveImage(userId, file),
-    services.localFileStorageService.saveToTemp(file),
-  ]);
-  const text = await services.geminiService.imageToText(localFilePath, language)
-  const csvText = await services.geminiService.textToCsvFormat(text)
-  const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvText, tmpFilePath, userId, language);
+  // Track the action after validation
+  await services.premiumAccessService.trackAction(userId, actionTypes.IMAGE_IMPORT);
 
-  if (quickGame === "true") {
-    try {
+  try {
+    const [tmpFilePath, localFilePath] = await Promise.all([
+      services.fileStorageService.saveImage(userId, file),
+      services.localFileStorageService.saveToTemp(file),
+    ]);
+    const text = await services.geminiService.imageToText(localFilePath, language)
+    const csvText = await services.geminiService.textToCsvFormat(text)
+    const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvText, tmpFilePath, userId, language);
+
+    if (quickGame === "true") {
       const result = await services.gameService.createGame(
         [resultImprot.attachment.attachmentId],
         userId,
         DEFAULT_VALUES.cards,
       );
-      return json({ gameId: result.gameId });
-    } catch (error) {
-      return json({ errors: 'Failed to create game' }, { status: 500 });
+      return json(success({ gameId: result.gameId }));
     }
-  }
 
-  return redirect("/dashboard/review");
+    return redirect("/dashboard/review");
+  } catch (error) {
+    return json(fail('Failed to process image or create game', 500), { status: 500 });
+  }
 };
 
 export default function ImportImagePage() {
   const navigate = useNavigate();
-  const fetcher = useFetcher<{ gameId?: string }>();
+  const actionData = useActionData<typeof action>();
+  const fetcher = useFetcher<{ gameId: string }>();
   const isSubmitting = fetcher.state !== 'idle';
 
   // Add useEffect for navigation after form submission completes
@@ -127,6 +148,9 @@ export default function ImportImagePage() {
               ← Back to Dashboard
             </button>
           </div>
+
+          {/* Add UsageLimitExceeded component */}
+          {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
 
           <ImportImage onSubmit={handleImportSubmit} />
 

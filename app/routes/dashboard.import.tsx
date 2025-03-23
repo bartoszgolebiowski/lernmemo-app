@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { json, redirect } from "@remix-run/node";
-import { useNavigate, useFetcher } from "@remix-run/react";
+import { useNavigate, useFetcher, useActionData } from "@remix-run/react";
 import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import ImportCSV from "~/components/ImportCSV";
 import ExampleCSVDownload from "~/components/ExampleCSVDownload";
@@ -8,7 +8,9 @@ import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
 import { getAuth } from '@clerk/remix/ssr.server';
 import { getServiceProvider } from '~/lib/services';
-
+import { success, fail, convertZodErrorsToFailResult } from "~/lib/services/utils";
+import { actionTypes } from "~/db/schema/userAction";
+import { FeedbackNotification } from '~/components/FeedbackNotification';
 
 export const meta: MetaFunction = () => {
   return [
@@ -35,7 +37,6 @@ const actionSchema = zfd.formData({
 
 const DEFAULT_VALUES = {
   cards: 10,
-  questions: 20,
 } as const;
 
 export const action = async (args: ActionFunctionArgs) => {
@@ -47,32 +48,52 @@ export const action = async (args: ActionFunctionArgs) => {
 
   const services = getServiceProvider(db);
 
+  // Check if the user can perform the CSV import action
+  const isPremium = false; // This should be fetched from your user service
+  const canPerformAction = await services.premiumAccessService.canPerformAction(
+    userId,
+    actionTypes.CSV_IMPORT,
+    isPremium
+  );
+
+  if (!canPerformAction) {
+    return json(
+      fail("You've reached your daily limit for CSV imports. Upgrade to premium for higher limits.", 429),
+      { status: 429 }
+    );
+  }
+
   const validation = actionSchema.safeParse(await args.request.formData());
-  if (!validation.success) return { status: 400, json: validation.error };
+  if (!validation.success) return json(convertZodErrorsToFailResult(validation.error), { status: 400 });
 
   const { language, file, quickGame } = validation.data;
-  const tmpFilePath = await services.fileStorageService.saveCSV(userId, file);
-  const csvFile = await services.localFileStorageService.toString(file);
-  const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvFile, tmpFilePath, userId, language);
 
-  if (quickGame === "true") {
-    try {
+  try {
+    // Track the action after validation
+    await services.premiumAccessService.trackAction(userId, actionTypes.CSV_IMPORT);
+
+    const tmpFilePath = await services.fileStorageService.saveCSV(userId, file);
+    const csvFile = await services.localFileStorageService.toString(file);
+    const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvFile, tmpFilePath, userId, language);
+
+    if (quickGame === "true") {
       const result = await services.gameService.createGame(
         [resultImprot.attachment.attachmentId],
         userId,
         DEFAULT_VALUES.cards,
       );
-      return json({ gameId: result.gameId });
-    } catch (error) {
-      return json({ errors: 'Failed to create game' }, { status: 500 });
+      return json(success({ gameId: result.gameId }));
     }
-  }
 
-  return redirect("/dashboard/review");
+    return redirect("/dashboard/review");
+  } catch (error) {
+    return json(fail('Failed to process CSV or create game', 500), { status: 500 });
+  }
 };
 
 export default function ImportPage() {
   const navigate = useNavigate();
+  const actionData = useActionData<typeof action>();
   const fetcher = useFetcher<{ gameId: string }>();
   const isSubmitting = fetcher.state !== 'idle';
 
@@ -121,6 +142,8 @@ export default function ImportPage() {
               ← Back to Dashboard
             </button>
           </div>
+
+          {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
 
           <ImportCSV onSubmit={handleImportSubmit} />
 

@@ -1,9 +1,12 @@
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, useNavigate, Form } from "@remix-run/react";
+import { useLoaderData, useNavigate, Form, useActionData } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { db } from '~/db/index';
 import { getAuth } from "@clerk/remix/ssr.server";
 import { getServiceProvider } from "~/lib/services";
+import { fail } from "~/lib/services/utils";
+import { actionTypes } from "~/db/schema/userAction";
+import { FeedbackNotification } from "~/components/FeedbackNotification";
 
 export const meta: MetaFunction = () => {
   return [
@@ -76,21 +79,39 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/dashboard/review");
   }
 
+  // Check if the user can perform the game creation action
+  const services = getServiceProvider(db);
+  const isPremium = false; // This should be fetched from your user service
+  const canPerformAction = await services.premiumAccessService.canPerformAction(
+    userId,
+    actionTypes.CREATE_GAME,
+    isPremium
+  );
+
+  if (!canPerformAction) {
+    return json(
+      fail("You've reached your daily limit for creating games. Upgrade to premium for higher limits.", 429),
+      { status: 429 }
+    );
+  }
+
   // Create a new game based on the current one using the service provider
   try {
-    const services = getServiceProvider(db);
+    // Track the action
+    await services.premiumAccessService.trackAction(userId, actionTypes.CREATE_GAME);
+
     const { gameId: newGameId } = await services.gameService.recreateGame(gameId, userId);
-    
+
     // Redirect to the new game
     return redirect(`/dashboard/game/${newGameId}`);
   } catch (error) {
-    console.error("Error recreating game:", error);
-    return json({ error: "Failed to recreate game" }, { status: 500 });
+    return json(fail("Failed to recreate game", 500), { status: 500 });
   }
 };
 
 export default function Summary() {
   const { game } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
 
   return (
@@ -121,7 +142,7 @@ export default function Summary() {
                   Replay This Set
                 </button>
               </Form>
-              
+
               <button
                 onClick={() => navigate("/dashboard/review")}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
@@ -131,6 +152,7 @@ export default function Summary() {
             </div>
           </div>
 
+          <FeedbackNotification actionData={actionData} />
           <div className="bg-white p-6 rounded-lg shadow-md mb-6">
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-4">Your Results</h2>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getAuth } from "@clerk/remix/ssr.server";
 import { json, redirect } from "@remix-run/node";
-import { useNavigate, Form, useLoaderData } from "@remix-run/react";
+import { useNavigate, Form, useLoaderData, useActionData } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
@@ -9,6 +9,9 @@ import { z } from 'zod';
 import { CardSelection } from "~/components/review/CardSelection";
 import { AttachmentTable } from "~/components/review/AttachmentTable";
 import { getServiceProvider } from '~/lib/services';
+import { actionTypes } from "~/db/schema/userAction";
+import { FeedbackNotification } from '~/components/FeedbackNotification';
+import { convertZodErrorsToFailResult, fail, successEmpty } from "~/lib/services/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -80,16 +83,33 @@ export const action = async (args: ActionFunctionArgs) => {
     const validation = startReviewSchema.safeParse(formData);
 
     if (!validation.success) {
-      return json({ errors: validation.error.format() }, { status: 400 });
+      return json(convertZodErrorsToFailResult(validation.error), { status: 400 });
     }
 
     const { cards, attachmentIds } = validation.data;
 
+    // Check if the user can perform the game creation action
+    const isPremium = false; // This should be fetched from your user service
+    const canPerformAction = await services.premiumAccessService.canPerformAction(
+      userId,
+      actionTypes.CREATE_GAME,
+      isPremium
+    );
+
+    if (!canPerformAction) {
+      return json(
+        fail("You've reached your daily limit for creating games. Upgrade to premium for higher limits.", 429),
+      );
+    }
+
     try {
+      // Track the action
+      await services.premiumAccessService.trackAction(userId, actionTypes.CREATE_GAME);
+
       const result = await services.gameService.createGame(attachmentIds, userId, cards);
       return redirect(`/dashboard/game/${result.gameId}`);
     } catch (error) {
-      return json({ errors: 'Failed to create game' }, { status: 500 });
+      return json(fail('Failed to create game', 500), { status: 500 });
     }
   }
 
@@ -97,24 +117,25 @@ export const action = async (args: ActionFunctionArgs) => {
     const validation = closeReviewSchema.safeParse(formData);
 
     if (!validation.success) {
-      return json({ errors: validation.error.format() }, { status: 400 });
+      return json(convertZodErrorsToFailResult(validation.error), { status: 400 });
     }
 
     const { gameId } = validation.data;
 
     try {
       await services.gameService.completeGame(gameId);
-      return json({ success: true });
+      return json(successEmpty());
     } catch (error) {
-      return json({ errors: 'Failed to close game' }, { status: 500 });
+      return json(fail('Failed to close game', 500), { status: 500 });
     }
   }
 
-  return json({ errors: 'Invalid action type' }, { status: 400 });
+  return json(fail('Invalid action type', 400), { status: 400 });
 };
 
 export default function ReviewPage() {
   const { uncompletedGames, attachmentsWithTranslations } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const navigate = useNavigate();
   const [expandedAttachments, setExpandedAttachments] = useState<Set<string>>(new Set());
   const [selectedAttachments, setSelectedAttachments] = useState<Set<string>>(new Set());
@@ -181,6 +202,7 @@ export default function ReviewPage() {
               ← Back to Dashboard
             </button>
           </div>
+          {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
 
           {/* Uncompleted Games Section */}
           {uncompletedGames && uncompletedGames.length > 0 && (

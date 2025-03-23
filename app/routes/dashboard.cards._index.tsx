@@ -7,6 +7,8 @@ import { db } from "~/db/index";
 import { ImportSection } from "~/components/dashboard/ImportSection";
 import { getAuth } from "@clerk/remix/ssr.server";
 import { getServiceProvider } from "~/lib/services";
+import { convertZodErrorsToFailResult, fail, successEmpty } from "~/lib/services/utils";
+import { FeedbackNotification } from "~/components/FeedbackNotification";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Manage Cards - Lernmemo App" }];
@@ -53,7 +55,9 @@ export const action = async (args: ActionFunctionArgs) => {
   const validation = toggleActionSchema.safeParse(formData);
 
   if (!validation.success) {
-    return json({ success: false, message: "Invalid form data" }, { status: 400 });
+    return json(
+      convertZodErrorsToFailResult(validation.error),
+      { status: 400 });
   }
   const services = getServiceProvider(db);
 
@@ -63,13 +67,13 @@ export const action = async (args: ActionFunctionArgs) => {
 
     if (attachment && attachment.userId === userId) {
       await services.attachmentService.toggleDeactivationAttachment(validation.data.attachmentId, userId);
-      return json({ success: true, message: "Attachment toggled successfully" });
+      return json(successEmpty());
     } else {
-      return json({ success: false, message: "Unauthorized or attachment not found" }, { status: 403 });
+      return json(fail("Unauthorized or attachment not found", 403), { status: 403 });
     }
 
   } catch (error) {
-    return json({ success: false, message: "An error occurred" }, { status: 500 });
+    return json(fail("An error occurred", 500), { status: 500 });
   }
 };
 
@@ -97,6 +101,8 @@ export default function ManageCardsPage() {
           </button>
         </div>
 
+        {actionData?.success === false && <FeedbackNotification actionData={actionData} />}
+
         <ImportSection
           title="Take a Picture"
           description="Extract vocabulary directly from textbooks, articles, or any image containing text. Our system will analyze the image and create flashcards from the detected words."
@@ -114,12 +120,6 @@ export default function ManageCardsPage() {
           icon="upload"
           className="my-8"
         />
-
-        {actionData?.message && (
-          <div className={`p-4 mb-4 rounded-md ${actionData.success ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'}`}>
-            {actionData.message}
-          </div>
-        )}
 
         {attachments && attachments.length > 0 && (
           <div className="flex flex-col">

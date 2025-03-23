@@ -18,7 +18,7 @@ export const USAGE_THRESHOLDS = {
 
 export class PremiumAccessService {
   constructor(private db: DrizzleDatabase) {}
-
+  
   /**
    * Track a user action
    * @param userId The user's ID
