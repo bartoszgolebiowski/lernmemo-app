@@ -10,8 +10,7 @@ export const flashcardAttachment = sqliteTable("flashcard_attachment", {
   attachmentId: text("attachment_id")
     .primaryKey()
     .$defaultFn(() => uuidv4()),
-  userId: text("user_id")
-    .notNull(),
+  userId: text("user_id").notNull(),
   fileLocation: text("file_location").notNull(),
   importedAt: text("imported_at").$default(() => new Date().toISOString()),
   deactivatedAt: text("deactivated_at"),
@@ -24,6 +23,7 @@ export const flashcardTranslation = sqliteTable("flashcard_translation", {
   word: text("word").notNull(),
   translation: text("translation").notNull(),
   targetLanguage: text("target_language").notNull(),
+  deactivatedAt: text("deactivated_at"),
 });
 
 export const flashcardImport = sqliteTable(
@@ -45,8 +45,7 @@ export const flashcardGame = sqliteTable("flashcard_game", {
   gameId: text("game_id")
     .primaryKey()
     .$defaultFn(() => uuidv4()),
-  userId: text("user_id")
-    .notNull(),
+  userId: text("user_id").notNull(),
   createdAt: text("created_at").$default(() => new Date().toISOString()),
   completedAt: text("completed_at"),
   flashcards: integer("cards").notNull(),

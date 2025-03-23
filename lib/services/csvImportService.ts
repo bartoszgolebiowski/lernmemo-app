@@ -6,7 +6,7 @@ import {
   flashcardImport,
   flashcardTranslation,
 } from "~/db/schema/flashcard";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 // Define the schema for a single row in the CSV
 const FlashcardRowSchema = z.object({
@@ -98,7 +98,12 @@ export class CsvImportService {
         flashcardTranslation,
         eq(flashcardImport.translationId, flashcardTranslation.translationId)
       )
-      .where(eq(flashcardImport.attachmentId, attachmentId));
+      .where(
+        and(
+          isNull(flashcardTranslation.deactivatedAt),
+          eq(flashcardImport.attachmentId, attachmentId)
+        )
+      );
   }
 }
 

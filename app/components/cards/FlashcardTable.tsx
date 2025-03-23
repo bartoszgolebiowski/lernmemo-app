@@ -41,7 +41,7 @@ export function FlashcardTable({
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
-        {rows.map((row, index) => (
+        {rows.filter(row => !row.isDeleted).map((row, index) => (
           <FlashcardTableRow
             key={row.id}
             row={row}

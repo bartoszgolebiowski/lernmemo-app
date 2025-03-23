@@ -1,9 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { json, redirect } from "@remix-run/node";
-import { useLoaderData, Form, useNavigate } from "@remix-run/react";
+import { useLoaderData, Form, useNavigate, useNavigation } from "@remix-run/react";
 import { z } from "zod";
 import { db } from "~/db/index";
-import React, { useState, useCallback, useMemo, useTransition, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { getAuth } from "@clerk/remix/ssr.server";
 import { createFlashcardEditService } from "~/lib/services/flashcardEditService";
 import { FlashcardEditorHeader } from "~/components/cards/FlashcardEditorHeader";
@@ -11,6 +11,10 @@ import { BackButton } from "~/components/cards/BackButton";
 import { FlashcardTable } from "~/components/cards/FlashcardTable";
 import { FlashcardEditorActions } from "~/components/cards/FlashcardEditorActions";
 import type { FlashcardRowData } from "~/components/cards/FlashcardTableRow";
+import { createFileStorageService } from "~/lib/services/fileStorageService";
+import { createPresignedUrlCache } from "~/lib/services/presignedUrlCache";
+import { env } from "~/lib/env";
+import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Edit Flashcard - Lernmemo App" }];
@@ -41,6 +45,13 @@ export const loader = async (args: LoaderFunctionArgs) => {
   }
 
   const flashcardEditService = createFlashcardEditService(db);
+  const fileService = createFileStorageService({
+    endpoint: env.R2_ENDPOINT,
+    bucketName: env.R2_BUCKET_NAME,
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY
+  });
+  const presignedUrlService = createPresignedUrlCache(fileService);
 
   // Get the flashcard using the edit service
   const flashcardData = await flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
@@ -49,13 +60,18 @@ export const loader = async (args: LoaderFunctionArgs) => {
     return redirect("/dashboard/cards");
   }
 
+  const presignedUrl = await presignedUrlService.getFile(flashcardData.fileLocation);
+
   return json({
     flashcard: {
       id: flashcardData.attachmentId,
+      fileLocation: flashcardData.fileLocation,
+      presignedUrl,
       rows: flashcardData.translations.map(t => ({
         id: t.id,
         word: t.word,
         translation: t.translation,
+        targetLanguage: t.targetLanguage,
       })),
     },
   });
@@ -101,7 +117,7 @@ export const action = async (args: ActionFunctionArgs) => {
       id: r.id,
       word: r.word,
       translation: r.translation,
-      targetLanguage: "auto", // Default to auto for existing UI
+      targetLanguage: existingFlashcard.targetLanguage,
       isDeleted: r.isDeleted
     }));
 
@@ -128,8 +144,9 @@ export const action = async (args: ActionFunctionArgs) => {
 export default function EditFlashcardPage() {
   const { flashcard } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [isPending, startTransition] = useTransition();
   const newRowInputRef = useRef<HTMLInputElement>(null);
+  const navigation = useNavigation();
+  const isPending = navigation.state === "submitting";
 
   // Local state for managing translations; ensure each row has a unique id:
   const [tableRows, setTableRows] = useState<FlashcardRowData[]>(
@@ -158,7 +175,7 @@ export default function EditFlashcardPage() {
 
   // Remove a row
   const removeRow = useCallback((index: number) => {
-    setTableRows(prev => prev.filter((_, i) => i !== index));
+    setTableRows(prev => prev.map((row, i) => i === index ? { ...row, isDeleted: true } : row));
   }, []);
 
   // Handle keyboard navigation between cells
@@ -196,14 +213,6 @@ export default function EditFlashcardPage() {
     });
   }, [tableRows, getRowErrors]);
 
-  // Handle form submission
-  const handleSubmit = useCallback((e: React.FormEvent) => {
-    e.preventDefault();
-    startTransition(() => {
-      // Let the form submit naturally
-    });
-  }, []);
-
   return (
     <main className="py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -213,8 +222,23 @@ export default function EditFlashcardPage() {
           <BackButton onClick={() => navigate("/dashboard/cards")} />
         </div>
 
+        {/* Add file preview section */}
+        <div className="mb-6 bg-white shadow rounded-lg p-4">
+          <h2 className="text-lg font-medium mb-4">Source File</h2>
+          {flashcard.fileLocation.endsWith(".csv") ? (
+            <a href={flashcard.presignedUrl} download className="text-blue-600 hover:underline">
+              Download imported CSV file
+            </a>
+          ) : (
+            <AttachmentPreview
+              fileUrl={flashcard.presignedUrl}
+              fileLocation={flashcard.fileLocation}
+            />
+          )}
+        </div>
+
         <div className="bg-white shadow rounded-lg overflow-hidden">
-          <Form method="post" onSubmit={handleSubmit} className="divide-y divide-gray-200">
+          <Form method="post" className="divide-y divide-gray-200">
             <input type="hidden" name="tableRows" value={JSON.stringify(tableRows)} />
 
             <div className="overflow-x-auto">

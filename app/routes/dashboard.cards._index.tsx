@@ -6,11 +6,7 @@ import { zfd } from "zod-form-data";
 import { db } from "~/db/index";
 import { createAttachmentService } from "~/lib/services/attachmentService";
 import { ImportSection } from "~/components/dashboard/ImportSection";
-import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
 import { getAuth } from "@clerk/remix/ssr.server";
-import { createFileStorageService } from "~/lib/services/fileStorageService";
-import { env } from "~/lib/env";
-import { createPresignedUrlCache } from "~/lib/services/presignedUrlCache";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Manage Cards - Lernmemo App" }];
@@ -25,29 +21,15 @@ export const loader = async (args: LoaderFunctionArgs) => {
 
   // Get all attachments for the user
   const attachmentService = createAttachmentService(db);
-  const fileService = createFileStorageService(
-    {
-      endpoint: env.R2_ENDPOINT,
-      bucketName: env.R2_BUCKET_NAME,
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY
-    }
-  );
-  const presignedUrlService = createPresignedUrlCache(fileService);
   const attachments = await attachmentService.getUserAttachments(userId);
-  const presignedUrls = await Promise.all(attachments.map(attachment =>
-    presignedUrlService.getFile(attachment.fileLocation)
-  ));
 
   return {
-    attachments: attachments.map((attachment, index) => ({
+    attachments: attachments.map((attachment) => ({
       id: attachment.attachmentId,
       wordCount: attachment.translationCount,
       targetLanguage: attachment.targetLanguage,
       createdAt: attachment.importedAt,
       isActive: !attachment.deactivatedAt,
-      presignedUrl: presignedUrls[index],
-      fileLocation: attachment.fileLocation,
       translations: attachment.translations.map(translation => ({
         word: translation.flashcard_translation?.word,
         translation: translation.flashcard_translation?.translation,
@@ -152,9 +134,6 @@ export default function ManageCardsPage() {
                           Details
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Attachment
-                        </th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Target Language
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -175,18 +154,6 @@ export default function ManageCardsPage() {
                             <Link to={`/dashboard/cards/${attachment.id}`} className="text-blue-600 hover:underline">
                               View Details
                             </Link>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {attachment.fileLocation.endsWith(".csv") ? (
-                              <a href={attachment.presignedUrl} download className="text-blue-600 hover:underline">
-                                Download CSV
-                              </a>
-                            ) : (
-                              <AttachmentPreview
-                                fileUrl={attachment.presignedUrl}
-                                fileLocation={attachment.fileLocation}
-                              />
-                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             {attachment.targetLanguage}

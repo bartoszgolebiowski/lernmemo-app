@@ -8,7 +8,7 @@ import {
   flashcardTranslation,
 } from "~/db/schema/flashcard";
 import { FlashcardEditService, Translation } from "./flashcardEditService";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { reset } from "drizzle-seed";
 import * as schema from "~/db/schema";
 import { v4 as uuidv4 } from "uuid";
@@ -171,9 +171,15 @@ describe("FlashcardEditService Integration Tests", () => {
 
       // Verify some translation details
       const translations = result?.translations || [];
-      expect(translations.some((t) => t.word === "house" && t.translation === "Haus")).toBe(true);
-      expect(translations.some((t) => t.word === "dog" && t.translation === "Hund")).toBe(true);
-      expect(translations.some((t) => t.word === "book" && t.translation === "Buch")).toBe(true);
+      expect(
+        translations.some((t) => t.word === "house" && t.translation === "Haus")
+      ).toBe(true);
+      expect(
+        translations.some((t) => t.word === "dog" && t.translation === "Hund")
+      ).toBe(true);
+      expect(
+        translations.some((t) => t.word === "book" && t.translation === "Buch")
+      ).toBe(true);
     });
 
     it("should return null when the attachment doesn't exist", async () => {
@@ -270,15 +276,15 @@ describe("FlashcardEditService Integration Tests", () => {
       expect(currentData).not.toBeNull();
 
       const existingTranslations = currentData!.translations;
-      
+
       // Add a new translation
       const updatedTranslations = [
         ...existingTranslations,
         {
           word: "water",
           translation: "Wasser",
-          targetLanguage: "de"
-        }
+          targetLanguage: "de",
+        },
       ];
 
       // Act
@@ -290,7 +296,9 @@ describe("FlashcardEditService Integration Tests", () => {
 
       // Assert
       expect(result).not.toBeNull();
-      expect(result?.translations).toHaveLength(existingTranslations.length + 1);
+      expect(result?.translations).toHaveLength(
+        existingTranslations.length + 1
+      );
 
       // Verify the new translation
       const newTranslation = result?.translations.find(
@@ -314,7 +322,9 @@ describe("FlashcardEditService Integration Tests", () => {
       expect(importRecords.length).toBe(4); // 3 original + 1 new
       expect(
         importRecords.some(
-          (r) => r.translationData.word === "water" && r.translationData.translation === "Wasser"
+          (r) =>
+            r.translationData.word === "water" &&
+            r.translationData.translation === "Wasser"
         )
       ).toBe(true);
     });
@@ -332,7 +342,7 @@ describe("FlashcardEditService Integration Tests", () => {
       expect(currentData).not.toBeNull();
 
       const existingTranslations = currentData!.translations;
-      
+
       // Mark one translation for deletion
       const updatedTranslations = existingTranslations.map((t) => {
         if (t.word === "book") {
@@ -350,7 +360,9 @@ describe("FlashcardEditService Integration Tests", () => {
 
       // Assert
       expect(result).not.toBeNull();
-      expect(result?.translations).toHaveLength(existingTranslations.length - 1);
+      expect(result?.translations).toHaveLength(
+        existingTranslations.length - 1
+      );
 
       // Verify the deleted translation is gone
       expect(result?.translations.some((t) => t.word === "book")).toBe(false);
@@ -363,7 +375,12 @@ describe("FlashcardEditService Integration Tests", () => {
           flashcardTranslation,
           eq(flashcardImport.translationId, flashcardTranslation.translationId)
         )
-        .where(eq(flashcardImport.attachmentId, attachmentId));
+        .where(
+          and(
+            eq(flashcardImport.attachmentId, attachmentId),
+            isNull(flashcardTranslation.deactivatedAt)
+          )
+        );
 
       expect(importRecords.length).toBe(2); // 3 original - 1 deleted
     });
@@ -376,7 +393,11 @@ describe("FlashcardEditService Integration Tests", () => {
       await expect(
         flashcardEditService.updateFlashcard(
           otherUserAttachmentId,
-          { translations: [{ word: "test", translation: "test", targetLanguage: "en" }] },
+          {
+            translations: [
+              { word: "test", translation: "test", targetLanguage: "en" },
+            ],
+          },
           userId
         )
       ).rejects.toThrow("Flashcard attachment not found or access denied");
@@ -406,10 +427,10 @@ describe("FlashcardEditService Integration Tests", () => {
       // Act - Try to update with invalid data (empty word)
       const result = await flashcardEditService.updateFlashcard(
         attachmentId,
-        { 
+        {
           translations: [
-            { word: "", translation: "test", targetLanguage: "en" }
-          ] 
+            { word: "", translation: "test", targetLanguage: "en" },
+          ],
         },
         userId
       );

@@ -1,5 +1,5 @@
 import { DrizzleDatabase } from "~/db/index";
-import { eq, and, count, sql, gt, isNull } from "drizzle-orm";
+import { eq, and, count, gt, isNull } from "drizzle-orm";
 import {
   flashcardGameAnswer,
   flashcardAttachment,

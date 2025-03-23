@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { DrizzleDatabase } from "~/db/index";
 import {
   flashcardAttachment,
@@ -20,6 +20,8 @@ export type FlashcardData = {
   attachmentId: string;
   userId: string;
   translations: Translation[];
+  fileLocation: string;
+  targetLanguage: string;
 };
 
 export type FlashcardUpdatePayload = {
@@ -83,7 +85,12 @@ export class FlashcardEditService {
           flashcardTranslation,
           eq(flashcardImport.translationId, flashcardTranslation.translationId)
         )
-        .where(eq(flashcardImport.attachmentId, attachmentId));
+        .where(
+          and(
+            eq(flashcardImport.attachmentId, attachmentId),
+            isNull(flashcardTranslation.deactivatedAt)
+          )
+        );
 
       // Format the translations
       const translations = translationsQuery.map(({ translationData }) => ({
@@ -93,15 +100,22 @@ export class FlashcardEditService {
         targetLanguage: translationData.targetLanguage,
       }));
 
+      if (!translations.length) {
+        throw new Error("No translations found for this flashcard");
+      }
       // Return the complete flashcard data
       return {
         attachmentId: attachment.attachmentId,
         userId: attachment.userId,
+        fileLocation: attachment.fileLocation,
         translations,
+        targetLanguage: translationsQuery[0].translationData.targetLanguage,
       };
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(error.message ?? "Failed to fetch flashcard details", { cause: error });
+        throw new Error(error.message ?? "Failed to fetch flashcard details", {
+          cause: error,
+        });
       }
       throw error;
     }
@@ -166,42 +180,18 @@ export class FlashcardEditService {
         // Process translations: update existing, add new ones
         for (const translation of data.translations) {
           if (translation.id && existingTranslationIds.has(translation.id)) {
-            // Existing translation - update or delete
-            if (translation.isDeleted) {
-              // First remove from the import table
-              await tx
-                .delete(flashcardImport)
-                .where(
-                  and(
-                    eq(flashcardImport.attachmentId, attachmentId),
-                    eq(flashcardImport.translationId, translation.id)
-                  )
-                );
-
-              // Then delete the translation if it's not used elsewhere
-              const usageCount = await tx
-                .select({ count: sql<number>`count(*)` })
-                .from(flashcardImport)
-                .where(eq(flashcardImport.translationId, translation.id));
-
-              if (usageCount[0].count === 0) {
-                await tx
-                  .delete(flashcardTranslation)
-                  .where(
-                    eq(flashcardTranslation.translationId, translation.id)
-                  );
-              }
-            } else {
-              // Update the translation
-              await tx
-                .update(flashcardTranslation)
-                .set({
-                  word: translation.word,
-                  translation: translation.translation,
-                  targetLanguage: translation.targetLanguage,
-                })
-                .where(eq(flashcardTranslation.translationId, translation.id));
-            }
+            // Update the translation
+            await tx
+              .update(flashcardTranslation)
+              .set({
+                word: translation.word,
+                translation: translation.translation,
+                targetLanguage: translation.targetLanguage,
+                deactivatedAt: translation.isDeleted
+                  ? new Date().toISOString()
+                  : null,
+              })
+              .where(eq(flashcardTranslation.translationId, translation.id));
           } else if (!translation.isDeleted) {
             // New translation - insert and link to this attachment
             const newTranslation = await tx
@@ -252,7 +242,12 @@ export class FlashcardEditService {
               flashcardTranslation.translationId
             )
           )
-          .where(eq(flashcardImport.attachmentId, attachmentId));
+          .where(
+            and(
+              eq(flashcardImport.attachmentId, attachmentId),
+              isNull(flashcardTranslation.deactivatedAt)
+            )
+          );
 
         // Format the translations
         const translations = translationsQuery.map(({ translationData }) => ({
@@ -262,11 +257,16 @@ export class FlashcardEditService {
           targetLanguage: translationData.targetLanguage,
         }));
 
+        if (!translations.length) {
+          throw new Error("No translations found for this flashcard");
+        }
         // Return the complete flashcard data
         return {
           attachmentId: attachment.attachmentId,
           userId: attachment.userId,
+          fileLocation: attachment.fileLocation,
           translations,
+          targetLanguage: translationsQuery[0].translationData.targetLanguage,
         };
       });
     } catch (error) {

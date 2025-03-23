@@ -65,12 +65,17 @@ export class GameService {
         targetLanguage: flashcardTranslation.targetLanguage,
       })
       .from(flashcardGameTranslation)
-      .where(eq(flashcardGameTranslation.gameId, gameId))
       .leftJoin(
         flashcardTranslation,
         eq(
           flashcardGameTranslation.translationId,
           flashcardTranslation.translationId
+        )
+      )
+      .where(
+        and(
+          isNull(flashcardTranslation.deactivatedAt),
+          eq(flashcardGameTranslation.gameId, gameId)
         )
       );
   }
