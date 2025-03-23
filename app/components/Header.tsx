@@ -16,6 +16,9 @@ export function Header() {
               <Link to="/dashboard" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                 Dashboard
               </Link>
+              <Link to="/dashboard/review" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
+                Review
+              </Link>
               <Link to="/dashboard/cards" className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50">
                 My Flashcards
               </Link>

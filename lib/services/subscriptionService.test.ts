@@ -182,6 +182,19 @@ describe("SubscriptionService Integration Tests", () => {
         subscriptionEventTypes.SUBSCRIPTION_CANCELED
       );
     });
+
+    it("should return false when user has no active subscription", async () => {
+      // Arrange
+      const userId = uuidv4();
+
+      // Act
+      await service.addSubscription(userId);
+      await service.cancelSubscription(userId);
+      const result = await service.isPremium(userId);
+
+      // Assert
+      expect(result).toBe(false);
+    });
   });
 
   describe("processExpiredSubscriptions", () => {
@@ -277,7 +290,7 @@ describe("SubscriptionService Integration Tests", () => {
   describe("getSubscriptionHistory", () => {
     const wait = (ms: number) =>
       new Promise((resolve) => setTimeout(resolve, ms));
-    
+
     it("should retrieve subscription history for a user", async () => {
       // Arrange
       const userId = uuidv4();

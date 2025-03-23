@@ -6,11 +6,9 @@ import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remi
 import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
 import { z } from 'zod';
-import { createAttachmentService } from "~/lib/services/attachmentService";
-import { createGameService } from "~/lib/services/gameService";
-import { createCsvImportService } from "~/lib/services/csvImportService";
 import { CardSelection } from "~/components/review/CardSelection";
 import { AttachmentTable } from "~/components/review/AttachmentTable";
+import { getServiceProvider } from '~/lib/services';
 
 export const meta: MetaFunction = () => {
   return [
@@ -26,14 +24,13 @@ export const loader = async (args: LoaderFunctionArgs) => {
     return redirect("/sign-in");
   }
 
-  // Get uncompleted games
-  const gameService = createGameService(db);
-  const attachmentSservice = createAttachmentService(db);
-  const importService = createCsvImportService(db);
-  const attachments = await attachmentSservice.getActiveUserAttachments(userId);
-  const uncompletedGames = await gameService.getUncompletedGames(userId);
+  // Get services from the central provider
+  const services = getServiceProvider(db);
+
+  const attachments = await services.attachmentService.getActiveUserAttachments(userId);
+  const uncompletedGames = await services.gameService.getUncompletedGames(userId);
   const translationsForAttachments = attachments.map((attachment) =>
-    importService.getTranslationsFromAttachment(attachment.attachmentId)
+    services.csvImportService.getTranslationsFromAttachment(attachment.attachmentId)
   );
 
   const translations = await Promise.all(translationsForAttachments);
@@ -73,6 +70,8 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/sign-in");
   }
 
+  const services = getServiceProvider(db);
+
   // Process form data
   const formData = await args.request.formData();
   const type = formData.get('type');
@@ -86,10 +85,8 @@ export const action = async (args: ActionFunctionArgs) => {
 
     const { cards, attachmentIds } = validation.data;
 
-    // Use GameService to create a new game
-    const gameService = createGameService(db);
     try {
-      const result = await gameService.createGame(attachmentIds, userId, cards);
+      const result = await services.gameService.createGame(attachmentIds, userId, cards);
       return redirect(`/dashboard/game/${result.gameId}`);
     } catch (error) {
       return json({ errors: 'Failed to create game' }, { status: 500 });
@@ -105,10 +102,8 @@ export const action = async (args: ActionFunctionArgs) => {
 
     const { gameId } = validation.data;
 
-    // Use GameService to close the game
-    const gameService = createGameService(db);
     try {
-      await gameService.completeGame(gameId);
+      await services.gameService.completeGame(gameId);
       return json({ success: true });
     } catch (error) {
       return json({ errors: 'Failed to close game' }, { status: 500 });

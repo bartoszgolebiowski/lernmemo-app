@@ -9,6 +9,24 @@ import {
   flashcardTranslation,
 } from "~/db/schema/flashcard";
 
+class AtLeastOneAttachmentError extends Error {
+  constructor() {
+    super("At least one attachment ID is required");
+  }
+}
+
+class FailedToCreateGameError extends Error {
+  constructor() {
+    super("Failed to create game");
+  }
+}
+
+class NoActiveTranslationsError extends Error {
+  constructor() {
+    super("No active flashcards found for the provided attachments");
+  }
+}
+
 export class GameService {
   public static ALL_FLASHCARDS = 2137;
 
@@ -51,7 +69,6 @@ export class GameService {
 
       return games[0];
     } catch (e) {
-      console.error("Error fetching game:", e);
       throw new Error("Failed to fetch game");
     }
   }
@@ -63,21 +80,20 @@ export class GameService {
         word: flashcardTranslation.word,
         translation: flashcardTranslation.translation,
         targetLanguage: flashcardTranslation.targetLanguage,
+        deactivatedAt: flashcardTranslation.deactivatedAt,
       })
       .from(flashcardGameTranslation)
       .leftJoin(
         flashcardTranslation,
-        eq(
-          flashcardGameTranslation.translationId,
-          flashcardTranslation.translationId
-        )
-      )
-      .where(
         and(
           isNull(flashcardTranslation.deactivatedAt),
-          eq(flashcardGameTranslation.gameId, gameId)
+          eq(
+            flashcardGameTranslation.translationId,
+            flashcardTranslation.translationId
+          )
         )
-      );
+      )
+      .where(eq(flashcardGameTranslation.gameId, gameId));
   }
 
   async getAnswersByGameId(gameId: string) {
@@ -96,7 +112,7 @@ export class GameService {
     flashcards: number
   ) {
     if (attachmentIds.length === 0) {
-      throw new Error("At least one attachment ID is required");
+      throw new AtLeastOneAttachmentError();
     }
     try {
       return await this.db.transaction(async (tx) => {
@@ -115,7 +131,7 @@ export class GameService {
           .returning();
 
         if (!games.length) {
-          throw new Error("Failed to create game");
+          throw new FailedToCreateGameError();
         }
 
         const gameId = games[0].gameId;
@@ -137,8 +153,24 @@ export class GameService {
         const importedTranslations = await tx
           .select({ translationId: flashcardImport.translationId })
           .from(flashcardImport)
-          .where(inArray(flashcardImport.attachmentId, attachmentIds));
+          .innerJoin(
+            flashcardTranslation,
+            eq(
+              flashcardImport.translationId,
+              flashcardTranslation.translationId
+            )
+          )
+          .where(
+            and(
+              inArray(flashcardImport.attachmentId, attachmentIds),
+              isNull(flashcardTranslation.deactivatedAt)
+            )
+          );
 
+        console.log(importedTranslations.length);
+        if (importedTranslations.length === 0) {
+          throw new NoActiveTranslationsError();
+        }
         // Choose the first N translationIds where N = flashcards argument.
         const selectedTranslations = importedTranslations.slice(0, flashcards);
 
@@ -164,6 +196,16 @@ export class GameService {
         return { gameId };
       });
     } catch (e) {
+      if (e instanceof AtLeastOneAttachmentError) {
+        throw e;
+      }
+      if (e instanceof FailedToCreateGameError) {
+        throw e;
+      }
+
+      if (e instanceof NoActiveTranslationsError) {
+        throw e;
+      }
       if (e instanceof Error) {
         throw new Error("Failed to create game", { cause: e });
       }
@@ -323,7 +365,16 @@ export class GameService {
         count: sql<number>`count(*)`,
       })
       .from(flashcardImport)
-      .where(inArray(flashcardImport.attachmentId, attachmentIds));
+      .innerJoin(
+        flashcardTranslation,
+        eq(flashcardImport.translationId, flashcardTranslation.translationId)
+      )
+      .where(
+        and(
+          inArray(flashcardImport.attachmentId, attachmentIds),
+          isNull(flashcardTranslation.deactivatedAt)
+        )
+      );
 
     return result[0]?.count ?? 0;
   }

@@ -2,8 +2,8 @@ import { json, redirect } from "@remix-run/node";
 import { useLoaderData, useNavigate, Form } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { db } from '~/db/index';
-import { createGameService } from "~/lib/services/gameService";
 import { getAuth } from "@clerk/remix/ssr.server";
+import { getServiceProvider } from "~/lib/services";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,17 +24,17 @@ export const loader = async (args: LoaderFunctionArgs) => {
     return redirect("/dashboard/review");
   }
 
-  // Fetch game data
-  const gameService = createGameService(db);
+  // Fetch game data using the service provider
+  const services = getServiceProvider(db);
   try {
-    const game = await gameService.getGameById(gameId, userId);
+    const game = await services.gameService.getGameById(gameId, userId);
     if (!game) {
       throw redirect("/dashboard/review");
     }
 
     const [cards, answers] = await Promise.all([
-      gameService.getTranslationsByGameId(game.gameId),
-      gameService.getAnswersByGameId(game.gameId)
+      services.gameService.getTranslationsByGameId(game.gameId),
+      services.gameService.getAnswersByGameId(game.gameId)
     ]);
 
     // Calculate statistics
@@ -76,10 +76,10 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/dashboard/review");
   }
 
-  // Create a new game based on the current one
+  // Create a new game based on the current one using the service provider
   try {
-    const gameService = createGameService(db);
-    const { gameId: newGameId } = await gameService.recreateGame(gameId, userId);
+    const services = getServiceProvider(db);
+    const { gameId: newGameId } = await services.gameService.recreateGame(gameId, userId);
     
     // Redirect to the new game
     return redirect(`/dashboard/game/${newGameId}`);

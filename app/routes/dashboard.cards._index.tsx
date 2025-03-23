@@ -4,9 +4,9 @@ import { useActionData, useLoaderData, Form, useNavigate, Link } from "@remix-ru
 import { z } from "zod";
 import { zfd } from "zod-form-data";
 import { db } from "~/db/index";
-import { createAttachmentService } from "~/lib/services/attachmentService";
 import { ImportSection } from "~/components/dashboard/ImportSection";
 import { getAuth } from "@clerk/remix/ssr.server";
+import { getServiceProvider } from "~/lib/services";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Manage Cards - Lernmemo App" }];
@@ -20,8 +20,8 @@ export const loader = async (args: LoaderFunctionArgs) => {
   }
 
   // Get all attachments for the user
-  const attachmentService = createAttachmentService(db);
-  const attachments = await attachmentService.getUserAttachments(userId);
+  const services = getServiceProvider(db);
+  const attachments = await services.attachmentService.getUserAttachments(userId);
 
   return {
     attachments: attachments.map((attachment) => ({
@@ -55,15 +55,14 @@ export const action = async (args: ActionFunctionArgs) => {
   if (!validation.success) {
     return json({ success: false, message: "Invalid form data" }, { status: 400 });
   }
-
-  const attachmentService = createAttachmentService(db);
+  const services = getServiceProvider(db);
 
   try {
     // Verify the attachment belongs to the user before deleting
-    const attachment = await attachmentService.getAttachmentByIdAndUserId(validation.data.attachmentId, userId);
+    const attachment = await services.attachmentService.getAttachmentByIdAndUserId(validation.data.attachmentId, userId);
 
     if (attachment && attachment.userId === userId) {
-      await attachmentService.toggleDeactivationAttachment(validation.data.attachmentId, userId);
+      await services.attachmentService.toggleDeactivationAttachment(validation.data.attachmentId, userId);
       return json({ success: true, message: "Attachment toggled successfully" });
     } else {
       return json({ success: false, message: "Unauthorized or attachment not found" }, { status: 403 });

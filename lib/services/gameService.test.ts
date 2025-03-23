@@ -236,6 +236,44 @@ describe("GameService Integration Tests", () => {
       expect(gameTranslations.length).toBe(flashcardCount);
     });
 
+    it("should create a game with all available flashcards when ALL_FLASHCARDS is specified", async () => {
+      // Arrange
+      const totalFlashcardsInAttachments = 40; // 20 from each attachment
+
+      // Act
+      const result = await gameService.createGame(
+        attachments,
+        userId,
+        GameService.ALL_FLASHCARDS
+      );
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.gameId).toBeDefined();
+
+      // Verify game record was created
+      const games = await db
+        .select()
+        .from(flashcardGame)
+        .where(eq(flashcardGame.gameId, result.gameId));
+      expect(games.length).toBe(1);
+      expect(games[0].flashcards).toBe(totalFlashcardsInAttachments);
+
+      // Verify game-attachment links were created for all attachments
+      const gameAttachments = await db
+        .select()
+        .from(flashcardGameAttachment)
+        .where(eq(flashcardGameAttachment.gameId, result.gameId));
+      expect(gameAttachments.length).toBe(attachments.length);
+
+      // Verify game translations were created for all available flashcards
+      const gameTranslations = await db
+        .select()
+        .from(flashcardGameTranslation)
+        .where(eq(flashcardGameTranslation.gameId, result.gameId));
+      expect(gameTranslations.length).toBe(totalFlashcardsInAttachments);
+    });
+
     it("should throw an error when attachment does not exist", async () => {
       // Arrange
       const nonExistentAttachmentId = uuidv4();
@@ -251,6 +289,164 @@ describe("GameService Integration Tests", () => {
       await expect(gameService.createGame([], userId, 3)).rejects.toThrow(
         "At least one attachment ID is required"
       );
+    });
+
+    it("should exclude deactivated flashcards when creating a game", async () => {
+      // Arrange - Deactivate a few translations
+      const translations = await db
+        .select()
+        .from(flashcardTranslation)
+        .where(eq(flashcardTranslation.targetLanguage, "de"))
+        .limit(5);
+      
+      // Deactivate first 3 translations
+      for (let i = 0; i < 3; i++) {
+        await db
+          .update(flashcardTranslation)
+          .set({ deactivatedAt: new Date().toISOString() })
+          .where(eq(flashcardTranslation.translationId, translations[i].translationId));
+      }
+
+      // Act - Create game with all flashcards
+      const result = await gameService.createGame(
+        [attachments[0]],
+        userId,
+        GameService.ALL_FLASHCARDS
+      );
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.gameId).toBeDefined();
+
+      // Verify game has only active flashcards (17 instead of 20)
+      const games = await db
+        .select()
+        .from(flashcardGame)
+        .where(eq(flashcardGame.gameId, result.gameId));
+      expect(games.length).toBe(1);
+      expect(games[0].flashcards).toBe(17); // 20 original - 3 deactivated
+
+      // Verify game translations only include active flashcards
+      const gameTranslations = await db
+        .select()
+        .from(flashcardGameTranslation)
+        .innerJoin(
+          flashcardTranslation,
+          eq(flashcardGameTranslation.translationId, flashcardTranslation.translationId)
+        )
+        .where(eq(flashcardGameTranslation.gameId, result.gameId));
+      
+      expect(gameTranslations.length).toBe(17);
+      
+      // Verify none of the deactivated translations are included
+      for (let i = 0; i < 3; i++) {
+        const deactivatedId = translations[i].translationId;
+        const included = gameTranslations.some(t => 
+          t?.flashcard_game_translation.translationId === deactivatedId
+        );
+        expect(included).toBe(false);
+      }
+    });
+
+    it("should create a game with specific number of flashcards excluding deactivated ones", async () => {
+      // Arrange - Deactivate a couple of translations
+      const translations = await db
+        .select()
+        .from(flashcardTranslation)
+        .where(eq(flashcardTranslation.targetLanguage, "de"))
+        .limit(4);
+      
+      // Deactivate first 2 translations
+      for (let i = 0; i < 2; i++) {
+        await db
+          .update(flashcardTranslation)
+          .set({ deactivatedAt: new Date().toISOString() })
+          .where(eq(flashcardTranslation.translationId, translations[i].translationId));
+      }
+
+      // Act - Request 5 flashcards
+      const flashcardCount = 5;
+      const result = await gameService.createGame(
+        [attachments[0]],
+        userId,
+        flashcardCount
+      );
+
+      // Assert
+      expect(result).toBeDefined();
+      
+      // Verify game has the requested number of flashcards
+      const gameTranslations = await db
+        .select({
+          translationId: flashcardGameTranslation.translationId,
+          deactivatedAt: flashcardTranslation.deactivatedAt
+        })
+        .from(flashcardGameTranslation)
+        .innerJoin(
+          flashcardTranslation,
+          eq(flashcardGameTranslation.translationId, flashcardTranslation.translationId)
+        )
+        .where(eq(flashcardGameTranslation.gameId, result.gameId));
+      
+      expect(gameTranslations.length).toBe(flashcardCount);
+      
+      // Verify none of the flashcards are deactivated
+      const hasDeactivated = gameTranslations.some(t => t.deactivatedAt !== null);
+      expect(hasDeactivated).toBe(false);
+    });
+
+    it("should handle when all flashcards are deactivated", async () => {
+      // Arrange - Deactivate all translations for one attachment
+      const translations = await db
+        .select()
+        .from(flashcardTranslation)
+        .where(eq(flashcardTranslation.targetLanguage, "de"));
+      
+      // Deactivate all translations
+      for (const translation of translations) {
+        await db
+          .update(flashcardTranslation)
+          .set({ deactivatedAt: new Date().toISOString() })
+          .where(eq(flashcardTranslation.translationId, translation.translationId));
+      }
+
+      // Act & Assert - Should still create game with 0 flashcards from attachment[0]
+      // but include translations from attachment[1]
+      const result = await gameService.createGame(
+        attachments,
+        userId,
+        GameService.ALL_FLASHCARDS
+      );
+
+      expect(result).toBeDefined();
+      
+      // Verify game has correct number of flashcards (only from the second attachment)
+      const gameTranslations = await db
+        .select()
+        .from(flashcardGameTranslation)
+        .where(eq(flashcardGameTranslation.gameId, result.gameId));
+      
+      expect(gameTranslations.length).toBe(20); // Only the 20 Spanish translations
+    });
+
+    it("should throw error when all flashcards from all attachments are deactivated", async () => {
+      // Arrange - Deactivate all translations
+      const allTranslations = await db
+        .select()
+        .from(flashcardTranslation);
+      
+      // Deactivate all translations
+      for (const translation of allTranslations) {
+        await db
+          .update(flashcardTranslation)
+          .set({ deactivatedAt: new Date().toISOString() })
+          .where(eq(flashcardTranslation.translationId, translation.translationId));
+      }
+
+      // Act & Assert
+      await expect(
+        gameService.createGame(attachments, userId, 5)
+      ).rejects.toThrow("No active flashcards found for the provided attachments");
     });
   });
 

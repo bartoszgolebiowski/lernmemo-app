@@ -3,15 +3,11 @@ import { json, redirect } from "@remix-run/node";
 import { useFetcher, useNavigate } from "@remix-run/react";
 import type { MetaFunction, ActionFunctionArgs } from "@remix-run/node";
 import ImportImage from '~/components/ImportImage';
-import { createGeminiService } from '~/lib/services/imageToCsvService';
-import { createFileStorageService } from '~/lib/services/fileStorageService';
-import { createCsvImportService } from '~/lib/services/csvImportService';
 import { db } from '~/db/index';
 import { zfd } from 'zod-form-data';
-import { createGameService } from '~/lib/services/gameService';
 import { getAuth } from '@clerk/remix/ssr.server';
-import { env } from '~/lib/env';
-import { createLocalFileStorageService } from '~/lib/services/localFileService';
+import { getServiceProvider } from '~/lib/services';
+
 
 export const meta: MetaFunction = () => {
   return [
@@ -48,17 +44,7 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/sign-in");
   }
 
-  const aiService = createGeminiService();
-  const localFileService = createLocalFileStorageService()
-  const fileService = createFileStorageService(
-    {
-      endpoint: env.R2_ENDPOINT,
-      bucketName: env.R2_BUCKET_NAME,
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY
-    }
-  );
-  const csvService = createCsvImportService(db)
+  const services = getServiceProvider(db);
 
   const validation = actionSchema.safeParse(await args.request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
@@ -66,18 +52,20 @@ export const action = async (args: ActionFunctionArgs) => {
   const { language, file, quickGame } = validation.data;
 
   const [tmpFilePath, localFilePath] = await Promise.all([
-    fileService.saveImage(userId, file),
-    localFileService.saveToTemp(file),
+    services.fileStorageService.saveImage(userId, file),
+    services.localFileStorageService.saveToTemp(file),
   ]);
-  const text = await aiService.imageToText(localFilePath, language)
-  const csvText = await aiService.textToCsvFormat(text)
-  const resultImprot = await csvService.importTranslationsFromCsv(csvText, tmpFilePath, userId, language);
+  const text = await services.geminiService.imageToText(localFilePath, language)
+  const csvText = await services.geminiService.textToCsvFormat(text)
+  const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvText, tmpFilePath, userId, language);
 
   if (quickGame === "true") {
-    // Use GameService to create a new game
-    const gameService = createGameService(db);
     try {
-      const result = await gameService.createGame([resultImprot.attachment.attachmentId], userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+      const result = await services.gameService.createGame(
+        [resultImprot.attachment.attachmentId],
+        userId,
+        DEFAULT_VALUES.cards,
+      );
       return json({ gameId: result.gameId });
     } catch (error) {
       return json({ errors: 'Failed to create game' }, { status: 500 });

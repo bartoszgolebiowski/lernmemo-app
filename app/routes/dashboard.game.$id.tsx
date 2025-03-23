@@ -3,11 +3,11 @@ import { useLoaderData, useNavigate, useFetcher } from "@remix-run/react";
 import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node";
 import { useEffect, useReducer, useState } from "react";
 import { db } from '~/db/index';
-import { createGameService } from "~/lib/services/gameService";
 import { gameActions, gameReducer, initialize } from "~/reducers/gameReducer";
 import { z } from "zod";
 import ReviewComplete from "~/components/ReviewComplete";
 import { getAuth } from "@clerk/remix/ssr.server";
+import { getServiceProvider } from "~/lib/services";
 
 export const meta: MetaFunction = () => {
   return [
@@ -29,15 +29,15 @@ export const loader = async (args: LoaderFunctionArgs) => {
   }
 
   // Fetch game data
-  const gameService = createGameService(db);
+  const services = getServiceProvider(db);
   try {
-    const game = await gameService.getGameById(gameId, userId);
+    const game = await services.gameService.getGameById(gameId, userId);
     if (!game) {
       throw redirect("/dashboard/review");
     }
     const [cards, asnwers] = await Promise.all([
-      gameService.getTranslationsByGameId(game.gameId),
-      gameService.getAnswersByGameId(game.gameId),
+      services.gameService.getTranslationsByGameId(game.gameId),
+      services.gameService.getAnswersByGameId(game.gameId),
     ]);
 
     if (!game) {
@@ -90,11 +90,11 @@ export async function action(args: ActionFunctionArgs) {
     return json({ error: completed.error }, { status: 400 });
   }
 
-  const gameService = createGameService(db);
-  await gameService.submitAnswers(gameId, [answers.data]);
+  const services = getServiceProvider(db);
+  await services.gameService.submitAnswers(gameId, [answers.data]);
 
   if (completed.data) {
-    await gameService.completeGame(gameId);
+    await services.gameService.completeGame(gameId);
     return redirect(`/dashboard/game/${gameId}`);
   }
 

@@ -5,13 +5,10 @@ import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remi
 import ImportCSV from "~/components/ImportCSV";
 import ExampleCSVDownload from "~/components/ExampleCSVDownload";
 import { db } from '~/db/index';
-import { createCsvImportService } from '~/lib/services/csvImportService';
-import { createFileStorageService } from '~/lib/services/fileStorageService';
 import { zfd } from 'zod-form-data';
-import { createGameService } from '~/lib/services/gameService';
 import { getAuth } from '@clerk/remix/ssr.server';
-import { createLocalFileStorageService } from '~/lib/services/localFileService';
-import { env } from '~/lib/env';
+import { getServiceProvider } from '~/lib/services';
+
 
 export const meta: MetaFunction = () => {
   return [
@@ -48,30 +45,23 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/sign-in");
   }
 
-  const csvService = createCsvImportService(db)
-  const localFileService = createLocalFileStorageService()
-  const fileService = createFileStorageService(
-    {
-      endpoint: env.R2_ENDPOINT,
-      bucketName: env.R2_BUCKET_NAME,
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY
-    }
-  );
+  const services = getServiceProvider(db);
 
   const validation = actionSchema.safeParse(await args.request.formData());
   if (!validation.success) return { status: 400, json: validation.error };
 
   const { language, file, quickGame } = validation.data;
-  const tmpFilePath = await fileService.saveCSV(userId, file);
-  const csvFile = await localFileService.toString(file);
-  const resultImprot = await csvService.importTranslationsFromCsv(csvFile, tmpFilePath, userId, language);
+  const tmpFilePath = await services.fileStorageService.saveCSV(userId, file);
+  const csvFile = await services.localFileStorageService.toString(file);
+  const resultImprot = await services.csvImportService.importTranslationsFromCsv(csvFile, tmpFilePath, userId, language);
 
   if (quickGame === "true") {
-    // Use GameService to create a new game
-    const gameService = createGameService(db);
     try {
-      const result = await gameService.createGame([resultImprot.attachment.attachmentId], userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+      const result = await services.gameService.createGame(
+        [resultImprot.attachment.attachmentId],
+        userId,
+        DEFAULT_VALUES.cards,
+      );
       return json({ gameId: result.gameId });
     } catch (error) {
       return json({ errors: 'Failed to create game' }, { status: 500 });

@@ -5,16 +5,13 @@ import { z } from "zod";
 import { db } from "~/db/index";
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { getAuth } from "@clerk/remix/ssr.server";
-import { createFlashcardEditService } from "~/lib/services/flashcardEditService";
 import { FlashcardEditorHeader } from "~/components/cards/FlashcardEditorHeader";
 import { BackButton } from "~/components/cards/BackButton";
 import { FlashcardTable } from "~/components/cards/FlashcardTable";
 import { FlashcardEditorActions } from "~/components/cards/FlashcardEditorActions";
 import type { FlashcardRowData } from "~/components/cards/FlashcardTableRow";
-import { createFileStorageService } from "~/lib/services/fileStorageService";
-import { createPresignedUrlCache } from "~/lib/services/presignedUrlCache";
-import { env } from "~/lib/env";
 import { AttachmentPreview } from "~/components/dashboard/AttachmentPreview";
+import { getServiceProvider } from "~/lib/services";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Edit Flashcard - Lernmemo App" }];
@@ -43,24 +40,16 @@ export const loader = async (args: LoaderFunctionArgs) => {
   if (!flashcardId) {
     return redirect("/dashboard/cards");
   }
-
-  const flashcardEditService = createFlashcardEditService(db);
-  const fileService = createFileStorageService({
-    endpoint: env.R2_ENDPOINT,
-    bucketName: env.R2_BUCKET_NAME,
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY
-  });
-  const presignedUrlService = createPresignedUrlCache(fileService);
+  const services = getServiceProvider(db);
 
   // Get the flashcard using the edit service
-  const flashcardData = await flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
+  const flashcardData = await services.flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
 
   if (!flashcardData) {
     return redirect("/dashboard/cards");
   }
 
-  const presignedUrl = await presignedUrlService.getFile(flashcardData.fileLocation);
+  const presignedUrl = await services.presignedUrlService.getFile(flashcardData.fileLocation);
 
   return json({
     flashcard: {
@@ -104,10 +93,10 @@ export const action = async (args: ActionFunctionArgs) => {
       }, { status: 400 });
     }
 
-    const flashcardEditService = createFlashcardEditService(db);
+    const services = getServiceProvider(db);
 
     // First fetch the existing flashcard to verify ownership
-    const existingFlashcard = await flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
+    const existingFlashcard = await services.flashcardEditService.fetchFlashcardDetails(flashcardId, userId);
     if (!existingFlashcard) {
       return json({ success: false, message: "Unauthorized or flashcard not found" }, { status: 403 });
     }
@@ -122,7 +111,7 @@ export const action = async (args: ActionFunctionArgs) => {
     }));
 
     // Update the flashcard with the structured data
-    await flashcardEditService.updateFlashcard(
+    await services.flashcardEditService.updateFlashcard(
       flashcardId,
       { translations: updatedTranslations },
       userId

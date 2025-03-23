@@ -3,16 +3,16 @@ import { DrizzleDatabase } from "~/db/index";
 import { ActionType, actionTypes, userActions } from "~/db/schema/userAction";
 
 // Threshold configuration for different user types
-const USAGE_THRESHOLDS = {
+export const USAGE_THRESHOLDS = {
   freemium: {
-    [actionTypes.IMAGE_IMPORT]: 5, // 5 image imports per day
+    [actionTypes.IMAGE_IMPORT]: 2, // 5 image imports per day
     [actionTypes.CSV_IMPORT]: 2, // 2 CSV imports per day
-    [actionTypes.CREATE_GAME]: 3, // 3 games created per day
+    [actionTypes.CREATE_GAME]: 10, // 3 games created per day
   },
   premium: {
-    [actionTypes.IMAGE_IMPORT]: 100, // 100 image imports per day
-    [actionTypes.CSV_IMPORT]: 50, // 50 CSV imports per day
-    [actionTypes.CREATE_GAME]: 20, // 20 games created per day
+    [actionTypes.IMAGE_IMPORT]: 10, // 100 image imports per day
+    [actionTypes.CSV_IMPORT]: 10, // 50 CSV imports per day
+    [actionTypes.CREATE_GAME]: 50, // 20 games created per day
   },
 };
 

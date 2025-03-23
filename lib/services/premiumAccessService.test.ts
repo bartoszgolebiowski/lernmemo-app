@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import path from "path";
 import { migrate } from "drizzle-orm/libsql/migrator";
-import { PremiumAccessService } from "./premiumAccessService";
+import { PremiumAccessService, USAGE_THRESHOLDS } from "./premiumAccessService";
 import { eq } from "drizzle-orm";
 import { reset } from "drizzle-seed";
 import { v4 as uuidv4 } from "uuid";
@@ -92,7 +92,7 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = false;
 
       // Seed 4 actions (limit for freemium is 5)
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.freemium.IMAGE_IMPORT - 1; i++) {
         await service.trackAction(userId, action);
       }
 
@@ -110,7 +110,7 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = false;
 
       // Seed 5 actions (limit for freemium is 5)
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.freemium.IMAGE_IMPORT; i++) {
         await service.trackAction(userId, action);
       }
 
@@ -128,7 +128,7 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = true;
 
       // Seed 99 actions (limit for premium is 100)
-      for (let i = 0; i < 99; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.premium.IMAGE_IMPORT - 1; i++) {
         await service.trackAction(userId, action);
       }
 
@@ -146,7 +146,7 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = true;
 
       // Seed 100 actions (limit for premium is 100)
-      for (let i = 0; i < 100; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.premium.IMAGE_IMPORT; i++) {
         await service.trackAction(userId, action);
       }
 
@@ -217,8 +217,9 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = false;
 
       // Seed 2 actions (limit for freemium CSV_IMPORT is 2)
-      await service.trackAction(userId, action);
-      await service.trackAction(userId, action);
+      for (let i = 0; i < USAGE_THRESHOLDS.freemium.CSV_IMPORT; i++) {
+        await service.trackAction(userId, action);
+      }
 
       // Act
       const result = await service.performAction(userId, action, isPremium);
@@ -251,9 +252,15 @@ describe("PremiumAccessService Integration Tests", () => {
       const result = await service.getRemainingActions(userId, isPremium);
 
       // Assert
-      expect(result[actionTypes.IMAGE_IMPORT]).toBe(3); // 5 - 2 = 3
-      expect(result[actionTypes.CSV_IMPORT]).toBe(1); // 2 - 1 = 1
-      expect(result[actionTypes.CREATE_GAME]).toBe(3); // 3 - 0 = 3
+      expect(result[actionTypes.IMAGE_IMPORT]).toBe(
+        USAGE_THRESHOLDS.freemium.IMAGE_IMPORT - 2
+      );
+      expect(result[actionTypes.CSV_IMPORT]).toBe(
+        USAGE_THRESHOLDS.freemium.CSV_IMPORT - 1
+      );
+      expect(result[actionTypes.CREATE_GAME]).toBe(
+        USAGE_THRESHOLDS.freemium.CREATE_GAME
+      );
     });
 
     it("should return correct remaining actions for premium user", async () => {
@@ -262,19 +269,29 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = true;
 
       // Seed some actions
-      await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
-      await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
-      await service.trackAction(userId, actionTypes.CREATE_GAME);
-      await service.trackAction(userId, actionTypes.CREATE_GAME);
-      await service.trackAction(userId, actionTypes.CREATE_GAME);
-
+      // Seed actions to reach the limit
+      for (let i = 0; i < 3; i++) {
+        await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
+      }
+      for (let i = 0; i < 3; i++) {
+        await service.trackAction(userId, actionTypes.CREATE_GAME);
+      }
+      for (let i = 0; i < 3; i++) {
+        await service.trackAction(userId, actionTypes.CSV_IMPORT);
+      }
       // Act
       const result = await service.getRemainingActions(userId, isPremium);
 
       // Assert
-      expect(result[actionTypes.IMAGE_IMPORT]).toBe(98); // 100 - 2 = 98
-      expect(result[actionTypes.CSV_IMPORT]).toBe(50); // 50 - 0 = 50
-      expect(result[actionTypes.CREATE_GAME]).toBe(17); // 20 - 3 = 17
+      expect(result[actionTypes.IMAGE_IMPORT]).toBe(
+        USAGE_THRESHOLDS.premium.IMAGE_IMPORT - 3
+      );
+      expect(result[actionTypes.CSV_IMPORT]).toBe(
+        USAGE_THRESHOLDS.premium.CSV_IMPORT - 3
+      );
+      expect(result[actionTypes.CREATE_GAME]).toBe(
+        USAGE_THRESHOLDS.premium.CREATE_GAME - 3
+      );
     });
 
     it("should return zero for actions at or over the limit", async () => {
@@ -283,10 +300,10 @@ describe("PremiumAccessService Integration Tests", () => {
       const isPremium = false;
 
       // Seed actions to reach the limit
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.freemium.IMAGE_IMPORT; i++) {
         await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
       }
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < USAGE_THRESHOLDS.freemium.CREATE_GAME; i++) {
         await service.trackAction(userId, actionTypes.CREATE_GAME);
       }
 
@@ -294,9 +311,12 @@ describe("PremiumAccessService Integration Tests", () => {
       const result = await service.getRemainingActions(userId, isPremium);
 
       // Assert
-      expect(result[actionTypes.IMAGE_IMPORT]).toBe(0); // At the limit
-      expect(result[actionTypes.CSV_IMPORT]).toBe(2); // Unused
-      expect(result[actionTypes.CREATE_GAME]).toBe(0); // At the limit
+      // Assert
+      expect(result[actionTypes.IMAGE_IMPORT]).toBe(0);
+      expect(result[actionTypes.CSV_IMPORT]).toBe(
+        USAGE_THRESHOLDS.freemium.CSV_IMPORT
+      );
+      expect(result[actionTypes.CREATE_GAME]).toBe(0);
     });
 
     it("should count only actions from the current day", async () => {
@@ -319,13 +339,12 @@ describe("PremiumAccessService Integration Tests", () => {
       }
 
       await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
-      await service.trackAction(userId, actionTypes.IMAGE_IMPORT);
 
       // Act
       const result = await service.getRemainingActions(userId, isPremium);
 
       // Assert - should only count today's actions
-      expect(result[actionTypes.IMAGE_IMPORT]).toBe(3); // 5 - 2 = 3
+      expect(result[actionTypes.IMAGE_IMPORT]).toBe(1); //
     });
   });
 });

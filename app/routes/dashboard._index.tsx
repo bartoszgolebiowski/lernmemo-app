@@ -2,9 +2,8 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { json, redirect } from "@remix-run/node";
 import { useActionData, useLoaderData } from "@remix-run/react";
 import { db } from "~/db/index";
-import { createAttachmentService } from "~/lib/services/attachmentService";
-import { createGameService } from "~/lib/services/gameService";
-import { createStatisticsService } from "~/lib/services/statisticsService";
+import { getServiceProvider } from "~/lib/services";
+import { getAuth } from "@clerk/remix/ssr.server";
 
 // Component imports
 import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
@@ -12,14 +11,11 @@ import { StatisticCard } from "~/components/dashboard/StatisticCard";
 import { QuickReviewPanel } from "~/components/dashboard/QuickReviewPanel";
 import { EmptyState } from "~/components/dashboard/EmptyState";
 import { ImportSection } from "~/components/dashboard/ImportSection";
-import { getAuth } from "@clerk/remix/ssr.server";
 
 export const meta: MetaFunction = () => {
   return [{ title: "Dashboard - Lernmemo App" }];
 };
 
-// This is a placeholder for actual auth checking
-// You would replace this with your actual auth logic
 export const loader = async (args: LoaderFunctionArgs) => {
   const { userId } = await getAuth(args);
 
@@ -27,9 +23,9 @@ export const loader = async (args: LoaderFunctionArgs) => {
     return redirect("/sign-in");
   }
 
-  // Get real user statistics using the statistics service
-  const statisticsService = createStatisticsService(db);
-  const stats = await statisticsService.getUserStats(userId);
+  // Get services from the central provider
+  const services = getServiceProvider(db);
+  const stats = await services.statisticsService.getUserStats(userId);
 
   return json({
     stats: {
@@ -47,15 +43,19 @@ export const action = async (args: ActionFunctionArgs) => {
     return redirect("/sign-in");
   }
 
-  // Use GameService to create a new game
-  const gameService = createGameService(db);
-  const attachmentService = createAttachmentService(db);
+  // Use services from the central provider
+  const services = getServiceProvider(db);
+
   try {
-    const attachment = await attachmentService.getLastAttachmentByUserId(userId);
+    const attachment = await services.attachmentService.getLastAttachmentByUserId(userId);
     if (!attachment) {
       return json({ errors: 'No attachment found' }, { status: 400 });
     }
-    const result = await gameService.createGame([attachment.attachmentId], userId, DEFAULT_VALUES.cards, DEFAULT_VALUES.questions);
+    const result = await services.gameService.createGame(
+      [attachment.attachmentId],
+      userId,
+      DEFAULT_VALUES.cards,
+    );
     return redirect(`/dashboard/game/${result.gameId}`);
   } catch (error) {
     return json({ errors: 'Failed to create game' }, { status: 500 });
