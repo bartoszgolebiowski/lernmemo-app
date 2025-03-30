@@ -101,7 +101,6 @@ export default function PremiumPage() {
 
       <TierComparison isPremium={isPremium} />
 
-
     </div>
   );
 }

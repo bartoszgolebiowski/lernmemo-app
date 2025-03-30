@@ -18,6 +18,8 @@ This document outlines the main technologies used across the frontend and backen
   - Authentication solution that manages user sessions and identity without storing sensitive user data in-house.
 - **Tailwind CSS**
   - Utility-first CSS framework for rapid UI development.
+- **Stripe**
+  - Payment processing platform for subscription management and payment processing.
 
 ---
 
@@ -37,5 +39,7 @@ This document outlines the main technologies used across the frontend and backen
   - Handles server-side authentication flows consistently with the frontend.
 - **Cloudflare R2**
   - Used for storing uploaded images (e.g., user-uploaded flashcard images) in a scalable and cost-effective object storage service.
+- **Stripe**
+  - API integration for subscription management, payment processing, and webhooks.
 
 ---

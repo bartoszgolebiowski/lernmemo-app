@@ -167,7 +167,6 @@ export class GameService {
             )
           );
 
-        console.log(importedTranslations.length);
         if (importedTranslations.length === 0) {
           throw new NoActiveTranslationsError();
         }

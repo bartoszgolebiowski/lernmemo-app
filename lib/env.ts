@@ -11,10 +11,9 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1),
   R2_BUCKET_NAME: z.string().min(1),
   R2_ENDPOINT: z.string().min(1),
-  // TURSO_CONNECTION_URL: z.string().min(1),
-  // TURSO_AUTH_TOKEN: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
+  STRIPE_PRICE_ID: z.string().min(1),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

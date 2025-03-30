@@ -2,6 +2,7 @@ import { ActionFunctionArgs, json, redirect } from "@remix-run/node";
 import { getAuth } from "@clerk/remix/ssr.server";
 import { getServiceProvider } from "~/lib/services";
 import { db } from "~/db/index";
+import { env } from "~/lib/env";
 
 export async function action(args: ActionFunctionArgs) {
   // Only allow POST requests
@@ -18,12 +19,16 @@ export async function action(args: ActionFunctionArgs) {
 
     // Get the origin from headers to construct return URL
     const origin = args.request.headers.get("origin") || "";
-    const returnUrl = `${origin}/dashboard/premium`;
-
+    const returnUrl = `${origin}/api/stripe/success`;
+    const successUrl = `${returnUrl}?success=true`;
+    const cancelUrl = `${returnUrl}?cancel=true`;
     const services = getServiceProvider(db);
+
     const { url } = await services.stripeService.createCheckoutSession(
       userId,
-      returnUrl
+      env.STRIPE_PRICE_ID,
+      successUrl,
+      cancelUrl
     );
 
     if (!url) {
@@ -31,6 +36,7 @@ export async function action(args: ActionFunctionArgs) {
     }
     return redirect(url);
   } catch (error) {
+    console.error("Error creating checkout session:", error);
     return json(
       { error: "Failed to create checkout session" },
       { status: 500 }

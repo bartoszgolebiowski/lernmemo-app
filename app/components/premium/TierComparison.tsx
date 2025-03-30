@@ -25,9 +25,14 @@ export function TierComparison({ isPremium }: TierComparisonProps) {
             </li>
           </ul>
           {isPremium && (
-            <button className="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded-md font-medium">
-              Switch to Free
-            </button>
+            <Form action="/api/stripe/portal" method="post">
+              <button
+                type="submit"
+                className="w-full py-2 px-4 border border-blue-300 text-blue-800 rounded-md font-medium text-center shadow-md ring-1 ring-blue-200 transition-shadow"
+              >
+                Manage Subscription
+              </button>
+            </Form>
           )}
           {!isPremium && (
             <button disabled className="w-full py-2 px-4 border border-blue-300 text-blue-800 rounded-md font-medium text-center shadow-md ring-1 ring-blue-200 transition-shadow cursor-not-allowed">

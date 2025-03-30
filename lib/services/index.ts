@@ -9,8 +9,10 @@ import { createLocalFileStorageService } from "./localFileService";
 import { createPremiumAccessService } from "./premiumAccessService";
 import { createStatisticsService } from "./statisticsService";
 import { createSubscriptionService } from "./subscriptionService";
-import { env } from "~/lib/env";
 import { createPresignedUrlCache } from "./presignedUrlCache";
+import { createStripeService } from "./stripeService";
+import { env } from "~/lib/env";
+import Stripe from "stripe";
 
 /**
  * Central service provider that creates and manages all application services
@@ -46,6 +48,7 @@ export class ServiceProvider {
   private presignedUrlServiceInstance?: ReturnType<
     typeof createPresignedUrlCache
   >;
+  private stripeServiceInstance?: ReturnType<typeof createStripeService>;
 
   constructor(db: DrizzleDatabase) {
     this.db = db;
@@ -124,6 +127,19 @@ export class ServiceProvider {
       this.subscriptionServiceInstance = createSubscriptionService(this.db);
     }
     return this.subscriptionServiceInstance;
+  }
+
+  get stripeService() {
+    if (!this.stripeServiceInstance) {
+      this.stripeServiceInstance = createStripeService(
+        this.db,
+        new Stripe(env.STRIPE_SECRET_KEY, {
+          apiVersion: "2025-02-24.acacia",
+          typescript: true,
+        })
+      );
+    }
+    return this.stripeServiceInstance;
   }
 
   get presignedUrlService() {

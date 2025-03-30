@@ -187,8 +187,12 @@ describe("SubscriptionService Integration Tests", () => {
       // Arrange
       const userId = uuidv4();
 
+      const flush = async () =>
+        new Promise((resolve) => setTimeout(resolve, 0));
+
       // Act
       await service.addSubscription(userId);
+      await flush(); // Ensure the subscription is added before cancellation
       await service.cancelSubscription(userId);
       const result = await service.isPremium(userId);
 
