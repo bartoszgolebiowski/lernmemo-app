@@ -1,1 +1,0 @@
-ALTER TABLE `flashcard_translation` ADD `deactivated_at` text;

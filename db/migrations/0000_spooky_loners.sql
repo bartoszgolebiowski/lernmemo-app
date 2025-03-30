@@ -11,8 +11,7 @@ CREATE TABLE `flashcard_game` (
 	`user_id` text NOT NULL,
 	`created_at` text,
 	`completed_at` text,
-	`cards` integer NOT NULL,
-	`questions` integer NOT NULL
+	`cards` integer NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE `flashcard_game_answer` (
@@ -53,7 +52,8 @@ CREATE TABLE `flashcard_translation` (
 	`translation_id` text PRIMARY KEY NOT NULL,
 	`word` text NOT NULL,
 	`translation` text NOT NULL,
-	`target_language` text NOT NULL
+	`target_language` text NOT NULL,
+	`deactivated_at` text
 );
 --> statement-breakpoint
 CREATE TABLE `subscription` (
@@ -73,4 +73,11 @@ CREATE TABLE `user_action` (
 	`action` text(255) NOT NULL,
 	`created_at` text,
 	PRIMARY KEY(`id`, `created_at`)
+);
+--> statement-breakpoint
+CREATE TABLE `user_stripe_mapping` (
+	`user_id` text PRIMARY KEY NOT NULL,
+	`stripe_customer_id` text NOT NULL,
+	`created_at` text NOT NULL,
+	`updated_at` text NOT NULL
 );

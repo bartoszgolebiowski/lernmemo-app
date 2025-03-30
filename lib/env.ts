@@ -4,7 +4,6 @@ import { z } from "zod";
  * Schema for environment variables
  */
 const envSchema = z.object({
-  DB_FILE_NAME: z.string().min(1),
   GEMINI_API_KEY: z.string().min(1),
   R2_ACCOUNT_ID: z.string().min(1),
   R2_ACCESS_KEY_ID: z.string().min(1),
@@ -14,6 +13,8 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().min(1),
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
   STRIPE_PRICE_ID: z.string().min(1),
+  TURSO_CONNECTION_URL: z.string().min(1),
+  TURSO_AUTH_TOKEN: z.string().min(1),
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "58ecc79e-43a5-452e-b7e4-9a81db753c2b",
+  "id": "9ea1d2a6-4245-434b-9322-39deb813f0dc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "flashcard_attachment": {
@@ -82,13 +82,6 @@
         },
         "cards": {
           "name": "cards",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "questions": {
-          "name": "questions",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -386,6 +379,13 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "deactivated_at": {
+          "name": "deactivated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
@@ -503,6 +503,44 @@
           "name": "user_action_id_created_at_pk"
         }
       },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user_stripe_mapping": {
+      "name": "user_stripe_mapping",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stripe_customer_id": {
+          "name": "stripe_customer_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
     }
