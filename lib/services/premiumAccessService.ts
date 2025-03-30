@@ -5,14 +5,14 @@ import { ActionType, actionTypes, userActions } from "~/db/schema/userAction";
 // Threshold configuration for different user types
 export const USAGE_THRESHOLDS = {
   freemium: {
-    [actionTypes.IMAGE_IMPORT]: 2, // 5 image imports per day
-    [actionTypes.CSV_IMPORT]: 2, // 2 CSV imports per day
-    [actionTypes.CREATE_GAME]: 10, // 3 games created per day
+    [actionTypes.IMAGE_IMPORT]: 2, // 2 image imports per day
+    [actionTypes.CSV_IMPORT]: 2,   // 2 CSV imports per day
+    [actionTypes.CREATE_GAME]: 10, // 10 games created per day
   },
   premium: {
-    [actionTypes.IMAGE_IMPORT]: 10, // 100 image imports per day
-    [actionTypes.CSV_IMPORT]: 10, // 50 CSV imports per day
-    [actionTypes.CREATE_GAME]: 50, // 20 games created per day
+    [actionTypes.IMAGE_IMPORT]: 10, // 10 image imports per day
+    [actionTypes.CSV_IMPORT]: 10,   // 10 CSV imports per day
+    [actionTypes.CREATE_GAME]: 50,  // 50 games created per day
   },
 };
 
