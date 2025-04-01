@@ -25,7 +25,8 @@ export const loader = async (args: LoaderFunctionArgs) => {
   if (!userId) {
     return redirect("/sign-in");
   }
-
+  const users = await (await fetch('https://jsonplaceholder.typicode.com/users')).json()
+  console.log({ users })
   // Get services from the central provider
   const services = getServiceProvider(db);
   const stats = await services.statisticsService.getUserStats(userId);
